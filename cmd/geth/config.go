@@ -155,6 +155,11 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	}
 	utils.RegisterEthService(stack, &cfg.Eth)
 
+	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
+		cfg.Eth.StateDiff = true
+		utils.RegisterStateDiffService(stack, ctx)
+	}
+
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
 	shhEnabled := enableWhisper(ctx)
 	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DeveloperFlag.Name)
@@ -179,9 +184,6 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
 	}
 
-	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
-		utils.RegisterStateDiffService(stack, ctx)
-	}
 	return stack
 }
 
