@@ -254,8 +254,6 @@ var AppHelpFlagGroups = []flagGroup{
 		Name: "STATE DIFF",
 		Flags: []cli.Flag{
 			utils.StateDiffFlag,
-			utils.StateDiffModeFlag,
-			utils.StateDiffPathFlag,
 		},
 	},
 	{
