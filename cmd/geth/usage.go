@@ -255,8 +255,9 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.StateDiffFlag,
 			utils.StateDiffPathsAndProofs,
-			utils.StateDiffLeafNodesOnly,
+			utils.StateDiffAllNodeTypes,
 			utils.StateDiffWatchedAddresses,
+			utils.StateDiffStreamBlock,
 		},
 	},
 	{
