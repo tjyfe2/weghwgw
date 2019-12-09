@@ -2408,6 +2408,9 @@ func TestProcessingStateDiffs(t *testing.T) {
 
 	moreBlocks := makeBlockChain(blocks[len(blocks)-1], 1, engine, db, canonicalSeed)
 	_, err = blockchain.InsertChain(moreBlocks)
+	if err != nil {
+		t.Error(err)
+	}
 
 	//a root hash can be dereferenced when it's state diff and it's child's state diff have been processed
 	//(i.e. it has a count of 2 in stateDiffsProcessed)
