@@ -166,6 +166,9 @@ func testHTTPAPI(t *testing.T) {
 		streamBlock: true,
 	}
 	payload, err := mockService.StateDiffAt(block1.Number().Uint64())
+	if err != nil {
+		t.Error(err)
+	}
 	expectedBlockRlp, _ := rlp.EncodeToBytes(block1)
 	if !bytes.Equal(payload.BlockRlp, expectedBlockRlp) {
 		t.Errorf("payload does not have expected block\r\actual block rlp: %v\r\nexpected block rlp: %v", payload.BlockRlp, expectedBlockRlp)
