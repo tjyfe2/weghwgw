@@ -19,6 +19,7 @@ package statediff
 import (
 	"bytes"
 	"fmt"
+	"math/big"
 	"sync"
 	"sync/atomic"
 
@@ -42,6 +43,7 @@ type blockChain interface {
 	GetBlockByNumber(number uint64) *types.Block
 	AddToStateDiffProcessedCollection(hash common.Hash)
 	GetReceiptsByHash(hash common.Hash) types.Receipts
+	GetTdByHash(hash common.Hash) *big.Int
 }
 
 // IService is the state-diffing service interface
@@ -172,6 +174,7 @@ func (sds *Service) processStateDiff(currentBlock, parentBlock *types.Block) (*P
 			return nil, err
 		}
 		payload.BlockRlp = blockBuff.Bytes()
+		payload.TotalDifficulty = sds.BlockChain.GetTdByHash(currentBlock.Hash())
 		receiptBuff := new(bytes.Buffer)
 		receipts := sds.BlockChain.GetReceiptsByHash(currentBlock.Hash())
 		if err = rlp.Encode(receiptBuff, receipts); err != nil {

@@ -112,6 +112,13 @@ func (sds *MockStateDiffService) processStateDiff(currentBlock, parentBlock *typ
 			return nil, err
 		}
 		payload.BlockRlp = rlpBuff.Bytes()
+		payload.TotalDifficulty = sds.BlockChain.GetTdByHash(currentBlock.Hash())
+		receiptBuff := new(bytes.Buffer)
+		receipts := sds.BlockChain.GetReceiptsByHash(currentBlock.Hash())
+		if err = rlp.Encode(receiptBuff, receipts); err != nil {
+			return nil, err
+		}
+		payload.ReceiptsRlp = receiptBuff.Bytes()
 	}
 	return &payload, nil
 }
