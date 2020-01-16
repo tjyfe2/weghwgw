@@ -36,9 +36,10 @@ type Subscription struct {
 
 // Payload packages the data to send to statediff subscriptions
 type Payload struct {
-	BlockRlp     []byte `json:"blockRlp"`
-	ReceiptsRlp  []byte `json:"receiptsRlp"`
-	StateDiffRlp []byte `json:"stateDiff"    gencodec:"required"`
+	BlockRlp        []byte   `json:"blockRlp"`
+	TotalDifficulty *big.Int `json:"totalDifficulty"`
+	ReceiptsRlp     []byte   `json:"receiptsRlp"`
+	StateDiffRlp    []byte   `json:"stateDiff"    gencodec:"required"`
 
 	encoded []byte
 	err     error

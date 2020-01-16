@@ -18,7 +18,7 @@ package mocks
 
 import (
 	"errors"
-
+	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -35,6 +35,7 @@ type BlockChain struct {
 	callCount              int
 	ChainEvents            []core.ChainEvent
 	Receipts               map[common.Hash]types.Receipts
+	TDByHash               map[common.Hash]*big.Int
 }
 
 // AddToStateDiffProcessedCollection mock method
@@ -89,7 +90,7 @@ func (blockChain *BlockChain) SubscribeChainEvent(ch chan<- core.ChainEvent) eve
 	return subscription
 }
 
-// SetReceiptsForHash mock method
+// SetReceiptsForHash test method
 func (blockChain *BlockChain) SetReceiptsForHash(hash common.Hash, receipts types.Receipts) {
 	if blockChain.Receipts == nil {
 		blockChain.Receipts = make(map[common.Hash]types.Receipts)
@@ -102,7 +103,7 @@ func (blockChain *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts
 	return blockChain.Receipts[hash]
 }
 
-// SetBlockForNumber mock method
+// SetBlockForNumber test method
 func (blockChain *BlockChain) SetBlockForNumber(block *types.Block, number uint64) {
 	if blockChain.blocksToReturnByNumber == nil {
 		blockChain.blocksToReturnByNumber = make(map[uint64]*types.Block)
@@ -113,4 +114,16 @@ func (blockChain *BlockChain) SetBlockForNumber(block *types.Block, number uint6
 // GetBlockByNumber mock method
 func (blockChain *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 	return blockChain.blocksToReturnByNumber[number]
+}
+
+// GetTdByHash mock method
+func (blockChain *BlockChain) GetTdByHash(hash common.Hash) *big.Int {
+	return blockChain.TDByHash[hash]
+}
+
+func (blockChain *BlockChain) SetTdByHash(hash common.Hash, td *big.Int) {
+	if blockChain.TDByHash == nil {
+		blockChain.TDByHash = make(map[common.Hash]*big.Int)
+	}
+	blockChain.TDByHash[hash] = td
 }
