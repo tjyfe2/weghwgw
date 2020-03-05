@@ -20,6 +20,7 @@
 package statediff
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -98,4 +99,26 @@ func pathToStr(it trie.NodeIterator) string {
 // hasTerm returns whether a hex key has the terminator flag.
 func hasTerm(s []byte) bool {
 	return len(s) > 0 && s[len(s)-1] == 16
+}
+
+// CheckKeyType checks what type of key we have
+func CheckKeyType(elements []interface{}) (NodeType, error) {
+	if len(elements) > 2 {
+		return Branch, nil
+	}
+	if len(elements) < 2 {
+		return Unknown, nil
+	}
+	switch elements[0].([]byte)[0] / 16 {
+	case '\x00':
+		return Extension, nil
+	case '\x01':
+		return Extension, nil
+	case '\x02':
+		return Leaf, nil
+	case '\x03':
+		return Leaf, nil
+	default:
+		return Unknown, fmt.Errorf("unknown hex prefix")
+	}
 }

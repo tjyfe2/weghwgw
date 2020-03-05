@@ -24,7 +24,6 @@ The service is spun up using the below CLI flags
 --statediff: boolean flag, turns on the service
 --statediff.streamblock: boolean flag, configures the service to associate and stream out the rest of the block data with the state diffs.
 --statediff.intermediatenodes: boolean flag, tells service to include intermediate (branch and extension) nodes; default (false) processes leaf nodes only.
---statediff.pathsandproofs: boolean flag, tells service to generate paths and proofs for the diffed storage and state trie leaf nodes.
 --statediff.watchedaddresses: string slice flag, used to limit the state diffing process to the given addresses. Usage: --statediff.watchedaddresses=addr1 --statediff.watchedaddresses=addr2 --statediff.watchedaddresses=addr3
 
 If you wish to use the websocket endpoint to subscribe to the statediff service, be sure to open up the Websocket RPC server with the `--ws` flag. The IPC-RPC server is turned on by default.

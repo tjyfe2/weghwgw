@@ -34,6 +34,11 @@ package trie
 // in the case of an odd number. All remaining nibbles (now an even number) fit properly
 // into the remaining bytes. Compact encoding is used for nodes stored on disk.
 
+// HexToCompact converts a hex path to the compact encoded format
+func HexToCompact(hex []byte) []byte {
+	return hexToCompact(hex)
+}
+
 func hexToCompact(hex []byte) []byte {
 	terminator := byte(0)
 	if hasTerm(hex) {
@@ -49,6 +54,11 @@ func hexToCompact(hex []byte) []byte {
 	}
 	decodeNibbles(hex, buf[1:])
 	return buf
+}
+
+// CompactToHex converts a compact encoded path to hex format
+func CompactToHex(compact []byte) []byte {
+	return compactToHex(compact)
 }
 
 func compactToHex(compact []byte) []byte {

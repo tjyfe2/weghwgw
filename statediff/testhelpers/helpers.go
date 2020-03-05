@@ -68,7 +68,7 @@ func testChainGen(i int, block *core.BlockGen) {
 		block.AddTx(tx2)
 		block.AddTx(tx3)
 	case 2:
-		// Block 3 is empty but was mined by account #2.
+		// Block 3 has a single tx from the bankAccount to the contract, that transfers no value, that is mined by account2
 		block.SetCoinbase(Account2Addr)
 		//get function: 60cd2685
 		//put function: c16431b9

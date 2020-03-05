@@ -77,21 +77,19 @@ type StateDiff struct {
 
 // AccountDiff holds the data for a single state diff node
 type AccountDiff struct {
-	Leaf    bool          `json:"leaf"        gencodec:"required"`
-	Key     []byte        `json:"key"         gencodec:"required"`
-	Value   []byte        `json:"value"       gencodec:"required"`
-	Proof   [][]byte      `json:"proof"       gencodec:"required"`
-	Path    []byte        `json:"path"        gencodec:"required"`
-	Storage []StorageDiff `json:"storage"     gencodec:"required"`
+	NodeType  NodeType      `json:"nodeType"        gencodec:"required"`
+	Path      []byte        `json:"path"         gencodec:"required"`
+	NodeValue []byte        `json:"value"       gencodec:"required"`
+	Storage   []StorageDiff `json:"storage"`
+	LeafKey   []byte        `json:"leafKey"`
 }
 
 // StorageDiff holds the data for a single storage diff node
 type StorageDiff struct {
-	Leaf  bool     `json:"leaf"        gencodec:"required"`
-	Key   []byte   `json:"key"         gencodec:"required"`
-	Value []byte   `json:"value"       gencodec:"required"`
-	Proof [][]byte `json:"proof"       gencodec:"required"`
-	Path  []byte   `json:"path"        gencodec:"required"`
+	NodeType  NodeType `json:"nodeType"        gencodec:"required"`
+	Path      []byte   `json:"path"     gencodec:"required"`
+	NodeValue []byte   `json:"value"       gencodec:"required"`
+	LeafKey   []byte   `json:"leafKey"`
 }
 
 // AccountsMap is a mapping of keccak256(address) => accountWrapper
@@ -99,10 +97,19 @@ type AccountsMap map[common.Hash]accountWrapper
 
 // AccountWrapper is used to temporary associate the unpacked account with its raw values
 type accountWrapper struct {
-	Account  *state.Account
-	Leaf     bool
-	RawKey   []byte
-	RawValue []byte
-	Proof    [][]byte
-	Path     []byte
+	Account   *state.Account
+	NodeType  NodeType
+	Path      []byte
+	NodeValue []byte
+	LeafKey   []byte
 }
+
+// NodeType for explicitly setting type of node
+type NodeType string
+
+const (
+	Unknown   NodeType = "Unknown"
+	Leaf      NodeType = "Leaf"
+	Extension NodeType = "Extension"
+	Branch    NodeType = "Branch"
+)

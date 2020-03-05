@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -81,11 +80,11 @@ type Service struct {
 }
 
 // NewStateDiffService creates a new statediff.Service
-func NewStateDiffService(db ethdb.Database, blockChain *core.BlockChain, config Config) (*Service, error) {
+func NewStateDiffService(blockChain *core.BlockChain, config Config) (*Service, error) {
 	return &Service{
 		Mutex:         sync.Mutex{},
 		BlockChain:    blockChain,
-		Builder:       NewBuilder(db, blockChain, config),
+		Builder:       NewBuilder(blockChain, config),
 		QuitChan:      make(chan bool),
 		Subscriptions: make(map[rpc.ID]Subscription),
 		StreamBlock:   config.StreamBlock,
