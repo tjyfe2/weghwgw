@@ -23,9 +23,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 func sortKeys(data AccountsMap) []string {
@@ -36,22 +33,6 @@ func sortKeys(data AccountsMap) []string {
 	sort.Strings(keys)
 
 	return keys
-}
-
-// bytesToNiblePath converts the byte representation of a path to its string representation
-func bytesToNiblePath(path []byte) string {
-	if hasTerm(path) {
-		path = path[:len(path)-1]
-	}
-	nibblePath := ""
-	for i, v := range common.ToHex(path) {
-		if i%2 == 0 && i > 1 {
-			continue
-		}
-		nibblePath = nibblePath + string(v)
-	}
-
-	return nibblePath
 }
 
 // findIntersection finds the set of strings from both arrays that are equivalent (same key as same index)
@@ -89,16 +70,6 @@ func findIntersection(a, b []string) []string {
 		}
 	}
 
-}
-
-// pathToStr converts the NodeIterator path to a string representation
-func pathToStr(it trie.NodeIterator) string {
-	return bytesToNiblePath(it.Path())
-}
-
-// hasTerm returns whether a hex key has the terminator flag.
-func hasTerm(s []byte) bool {
-	return len(s) > 0 && s[len(s)-1] == 16
 }
 
 // CheckKeyType checks what type of key we have

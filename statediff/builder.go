@@ -152,7 +152,7 @@ func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (AccountsMap, error
 		case Leaf:
 			var account state.Account
 			if err := rlp.DecodeBytes(nodeElements[1].([]byte), &account); err != nil {
-				return nil, fmt.Errorf("error decoding account for leaf node at path %x\r\nerror: %v\r\n", nodePath, err)
+				return nil, fmt.Errorf("error decoding account for leaf node at path %x nerror: %v", nodePath, err)
 			}
 			partialPath := trie.CompactToHex(nodeElements[0].([]byte))
 			valueNodePath := append(nodePath, partialPath...)
