@@ -902,6 +902,12 @@ func makeLog(size int) executionFunc {
 	}
 }
 
+func opPaygas(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+	interpreter.evm.snapshots[len(interpreter.evm.snapshots)-1] = interpreter.evm.StateDB.Snapshot()
+	interpreter.intPool.put(callContext.stack.pop())
+	return nil, nil
+}
+
 // opPush1 is a specialized version of pushN
 func opPush1(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	var (

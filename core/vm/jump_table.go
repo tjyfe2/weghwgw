@@ -50,17 +50,32 @@ type operation struct {
 }
 
 var (
-	frontierInstructionSet         = newFrontierInstructionSet()
-	homesteadInstructionSet        = newHomesteadInstructionSet()
-	tangerineWhistleInstructionSet = newTangerineWhistleInstructionSet()
-	spuriousDragonInstructionSet   = newSpuriousDragonInstructionSet()
-	byzantiumInstructionSet        = newByzantiumInstructionSet()
-	constantinopleInstructionSet   = newConstantinopleInstructionSet()
-	istanbulInstructionSet         = newIstanbulInstructionSet()
+	frontierInstructionSet           = newFrontierInstructionSet()
+	homesteadInstructionSet          = newHomesteadInstructionSet()
+	tangerineWhistleInstructionSet   = newTangerineWhistleInstructionSet()
+	spuriousDragonInstructionSet     = newSpuriousDragonInstructionSet()
+	byzantiumInstructionSet          = newByzantiumInstructionSet()
+	constantinopleInstructionSet     = newConstantinopleInstructionSet()
+	istanbulInstructionSet           = newIstanbulInstructionSet()
+	accountAbstractionInstructionSet = newAccountAbstractionInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]operation
+
+func newAccountAbstractionInstructionSet() JumpTable {
+	instructionSet := newIstanbulInstructionSet()
+
+	instructionSet[PAYGAS] = operation{
+		execute:     opPaygas,
+		constantGas: GasQuickStep,
+		minStack:    minStack(1, 0),
+		maxStack:    maxStack(1, 0),
+		valid:       true,
+	}
+
+	return instructionSet
+}
 
 // newIstanbulInstructionSet returns the frontier, homestead
 // byzantium, contantinople and petersburg instructions.
