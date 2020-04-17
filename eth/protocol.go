@@ -37,13 +37,13 @@ const (
 )
 
 // protocolName is the official short name of the protocol used during capability negotiation.
-const protocolName = "eth"
+const ProtocolName = "eth"
 
 // ProtocolVersions are the supported versions of the eth protocol (first is primary).
 var ProtocolVersions = []uint{eth65, eth64, eth63}
 
 // protocolLengths are the number of implemented message corresponding to different protocol versions.
-var protocolLengths = map[uint]uint64{eth65: 17, eth64: 17, eth63: 17}
+var ProtocolLengths = map[uint]uint64{eth65: 17, eth64: 17, eth63: 17}
 
 const protocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 
@@ -133,7 +133,7 @@ type statusData63 struct {
 }
 
 // statusData is the network packet for the status message for eth/64 and later.
-type statusData struct {
+type StatusData struct {
 	ProtocolVersion uint32
 	NetworkID       uint64
 	TD              *big.Int
@@ -143,28 +143,28 @@ type statusData struct {
 }
 
 // newBlockHashesData is the network packet for the block announcements.
-type newBlockHashesData []struct {
+type NewBlockHashesData []struct {
 	Hash   common.Hash // Hash of one particular block being announced
 	Number uint64      // Number of one particular block being announced
 }
 
 // getBlockHeadersData represents a block header query.
-type getBlockHeadersData struct {
-	Origin  hashOrNumber // Block from which to retrieve headers
+type GetBlockHeadersData struct {
+	Origin  HashOrNumber // Block from which to retrieve headers
 	Amount  uint64       // Maximum number of headers to retrieve
 	Skip    uint64       // Blocks to skip between consecutive headers
 	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
 }
 
 // hashOrNumber is a combined field for specifying an origin block.
-type hashOrNumber struct {
+type HashOrNumber struct {
 	Hash   common.Hash // Block hash from which to retrieve headers (excludes Number)
 	Number uint64      // Block hash from which to retrieve headers (excludes Hash)
 }
 
 // EncodeRLP is a specialized encoder for hashOrNumber to encode only one of the
 // two contained union fields.
-func (hn *hashOrNumber) EncodeRLP(w io.Writer) error {
+func (hn *HashOrNumber) EncodeRLP(w io.Writer) error {
 	if hn.Hash == (common.Hash{}) {
 		return rlp.Encode(w, hn.Number)
 	}
@@ -176,7 +176,7 @@ func (hn *hashOrNumber) EncodeRLP(w io.Writer) error {
 
 // DecodeRLP is a specialized decoder for hashOrNumber to decode the contents
 // into either a block hash or a block number.
-func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
+func (hn *HashOrNumber) DecodeRLP(s *rlp.Stream) error {
 	_, size, _ := s.Kind()
 	origin, err := s.Raw()
 	if err == nil {
@@ -193,13 +193,13 @@ func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
 }
 
 // newBlockData is the network packet for the block propagation message.
-type newBlockData struct {
+type NewBlockData struct {
 	Block *types.Block
 	TD    *big.Int
 }
 
 // sanityCheck verifies that the values are reasonable, as a DoS protection
-func (request *newBlockData) sanityCheck() error {
+func (request *NewBlockData) sanityCheck() error {
 	if err := request.Block.SanityCheck(); err != nil {
 		return err
 	}
@@ -212,10 +212,10 @@ func (request *newBlockData) sanityCheck() error {
 }
 
 // blockBody represents the data content of a single block.
-type blockBody struct {
+type BlockBody struct {
 	Transactions []*types.Transaction // Transactions contained within a block
 	Uncles       []*types.Header      // Uncles contained within a block
 }
 
 // blockBodiesData is the network packet for block content distribution.
-type blockBodiesData []*blockBody
+type BlockBodiesData []*BlockBody
