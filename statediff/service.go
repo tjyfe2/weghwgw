@@ -136,7 +136,7 @@ func (sds *Service) Loop(chainEventCh chan core.ChainEvent) {
 				log.Error(fmt.Sprintf("Parent block is nil, skipping this block (%d)", currentBlock.Number()))
 				continue
 			}
-			payload, err := sds.processStateDiff(currentBlock, parentBlock)
+			payload, err := sds.processStateDiff(currentBlock, parentBlock.Root())
 			if err != nil {
 				log.Error(fmt.Sprintf("Error building statediff for block %d; error: ", currentBlock.Number()) + err.Error())
 				continue
@@ -155,8 +155,8 @@ func (sds *Service) Loop(chainEventCh chan core.ChainEvent) {
 }
 
 // processStateDiff method builds the state diff payload from the current and parent block before sending it to listening subscriptions
-func (sds *Service) processStateDiff(currentBlock, parentBlock *types.Block) (*Payload, error) {
-	stateDiff, err := sds.Builder.BuildStateDiff(parentBlock.Root(), currentBlock.Root(), currentBlock.Number(), currentBlock.Hash())
+func (sds *Service) processStateDiff(currentBlock *types.Block, parentRoot common.Hash) (*Payload, error) {
+	stateDiff, err := sds.Builder.BuildStateDiff(parentRoot, currentBlock.Root(), currentBlock.Number(), currentBlock.Hash())
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +280,10 @@ func (sds *Service) close() {
 // This operation cannot be performed back past the point of db pruning; it requires an archival node
 func (sds *Service) StateDiffAt(blockNumber uint64) (*Payload, error) {
 	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
-	parentBlock := sds.BlockChain.GetBlockByHash(currentBlock.ParentHash())
 	log.Info(fmt.Sprintf("sending state diff at %d", blockNumber))
-	return sds.processStateDiff(currentBlock, parentBlock)
+	if blockNumber == 0 {
+		return sds.processStateDiff(currentBlock, common.Hash{})
+	}
+	parentBlock := sds.BlockChain.GetBlockByHash(currentBlock.ParentHash())
+	return sds.processStateDiff(currentBlock, parentBlock.Root())
 }

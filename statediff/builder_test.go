@@ -41,6 +41,7 @@ var (
 	miningReward                   = int64(2000000000000000000)
 	minerAddress                   = common.HexToAddress("0x0")
 	minerLeafKey                   = testhelpers.AddressToLeafKey(minerAddress)
+	nullHash                       = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
 
 	balanceChange10000         = int64(10000)
 	balanceChange1000          = int64(1000)
@@ -71,6 +72,16 @@ var (
 	newStorageLeafNode, _ = rlp.EncodeToBytes([]interface{}{
 		common.Hex2Bytes("305787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace"),
 		newStorageValue,
+	})
+	bankAccountAtBlock0, _ = rlp.EncodeToBytes(state.Account{
+		Nonce:    nonce0,
+		Balance:  big.NewInt(testhelpers.TestBankFunds.Int64()),
+		CodeHash: common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
+		Root:     common.HexToHash(originalContractRoot),
+	})
+	bankAccountAtBlock0LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+		common.Hex2Bytes("2000bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
+		bankAccountAtBlock0,
 	})
 	account1AtBlock1, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    nonce0,
@@ -302,7 +313,31 @@ func TestBuilder1(t *testing.T) {
 				UpdatedAccounts: emptyAccountDiffIncrementalMap,
 			},
 		},
-
+		{
+			"testBlock0",
+			//10000 transferred from testBankAddress to account1Addr
+			arguments{
+				oldStateRoot: nullHash,
+				newStateRoot: block0.Root(),
+				blockNumber:  block0.Number(),
+				blockHash:    block0.Hash(),
+			},
+			&statediff.StateDiff{
+				BlockNumber: block0.Number(),
+				BlockHash:   block0.Hash(),
+				CreatedAccounts: []statediff.AccountDiff{
+					{
+						Path:      []byte{},
+						NodeType:  statediff.Leaf,
+						LeafKey:   testhelpers.BankLeafKey,
+						NodeValue: bankAccountAtBlock0LeafNode,
+						Storage:   []statediff.StorageDiff{},
+					},
+				},
+				DeletedAccounts: emptyAccountDiffEventualMap,
+				UpdatedAccounts: emptyAccountDiffIncrementalMap,
+			},
+		},
 		{
 			"testBlock1",
 			//10000 transferred from testBankAddress to account1Addr
@@ -462,6 +497,9 @@ func TestBuilder1(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		if test.name != "testBlock0" {
+			continue
+		}
 		arguments := test.startingArguments
 		diff, err := builder.BuildStateDiff(arguments.oldStateRoot, arguments.newStateRoot, arguments.blockNumber, arguments.blockHash)
 		if err != nil {
@@ -518,7 +556,31 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 				UpdatedAccounts: emptyAccountDiffIncrementalMap,
 			},
 		},
-
+		{
+			"testBlock0",
+			//10000 transferred from testBankAddress to account1Addr
+			arguments{
+				oldStateRoot: nullHash,
+				newStateRoot: block0.Root(),
+				blockNumber:  block0.Number(),
+				blockHash:    block0.Hash(),
+			},
+			&statediff.StateDiff{
+				BlockNumber: block0.Number(),
+				BlockHash:   block0.Hash(),
+				CreatedAccounts: []statediff.AccountDiff{
+					{
+						Path:      []byte{},
+						NodeType:  statediff.Leaf,
+						LeafKey:   testhelpers.BankLeafKey,
+						NodeValue: bankAccountAtBlock0LeafNode,
+						Storage:   []statediff.StorageDiff{},
+					},
+				},
+				DeletedAccounts: emptyAccountDiffEventualMap,
+				UpdatedAccounts: emptyAccountDiffIncrementalMap,
+			},
+		},
 		{
 			"testBlock1",
 			//10000 transferred from testBankAddress to account1Addr
@@ -746,6 +808,23 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 			"testEmptyDiff",
 			arguments{
 				oldStateRoot: block0.Root(),
+				newStateRoot: block0.Root(),
+				blockNumber:  block0.Number(),
+				blockHash:    block0.Hash(),
+			},
+			&statediff.StateDiff{
+				BlockNumber:     block0.Number(),
+				BlockHash:       block0.Hash(),
+				CreatedAccounts: emptyAccountDiffEventualMap,
+				DeletedAccounts: emptyAccountDiffEventualMap,
+				UpdatedAccounts: emptyAccountDiffIncrementalMap,
+			},
+		},
+		{
+			"testBlock0",
+			//10000 transferred from testBankAddress to account1Addr
+			arguments{
+				oldStateRoot: nullHash,
 				newStateRoot: block0.Root(),
 				blockNumber:  block0.Number(),
 				blockHash:    block0.Hash(),

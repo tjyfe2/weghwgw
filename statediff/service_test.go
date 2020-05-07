@@ -55,9 +55,9 @@ var (
 	testRoot1 = common.HexToHash("0x03")
 	testRoot2 = common.HexToHash("0x04")
 	testRoot3 = common.HexToHash("0x04")
-	header1   = types.Header{ParentHash: parentHash1, Root: testRoot1}
-	header2   = types.Header{ParentHash: parentHash2, Root: testRoot2}
-	header3   = types.Header{ParentHash: common.HexToHash("parent hash"), Root: testRoot3}
+	header1   = types.Header{ParentHash: parentHash1, Root: testRoot1, Number: big.NewInt(1)}
+	header2   = types.Header{ParentHash: parentHash2, Root: testRoot2, Number: big.NewInt(2)}
+	header3   = types.Header{ParentHash: common.HexToHash("parent hash"), Root: testRoot3, Number: big.NewInt(3)}
 
 	testBlock1 = types.NewBlock(&header1, nil, nil, nil)
 	testBlock2 = types.NewBlock(&header2, nil, nil, nil)
