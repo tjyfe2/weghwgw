@@ -34,14 +34,12 @@ import (
 // TODO: add test that filters on address
 var (
 	contractLeafKey                []byte
-	emptyAccountDiffEventualMap    = make([]statediff.AccountDiff, 0)
-	emptyAccountDiffIncrementalMap = make([]statediff.AccountDiff, 0)
+	emptyAccountMap                = make([]statediff.AccountDiff, 0)
 	block0, block1, block2, block3 *types.Block
 	builder                        statediff.Builder
 	miningReward                   = int64(2000000000000000000)
 	minerAddress                   = common.HexToAddress("0x0")
 	minerLeafKey                   = testhelpers.AddressToLeafKey(minerAddress)
-	nullHash                       = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
 
 	balanceChange10000         = int64(10000)
 	balanceChange1000          = int64(1000)
@@ -279,7 +277,7 @@ type arguments struct {
 	blockHash    common.Hash
 }
 
-func TestBuilder1(t *testing.T) {
+func TestBuilder(t *testing.T) {
 	blockHashes, blockMap, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
 	contractLeafKey = testhelpers.AddressToLeafKey(testhelpers.ContractAddr)
 	defer chain.Stop()
@@ -308,16 +306,16 @@ func TestBuilder1(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber:     block0.Number(),
 				BlockHash:       block0.Hash(),
-				CreatedAccounts: emptyAccountDiffEventualMap,
-				DeletedAccounts: emptyAccountDiffEventualMap,
-				UpdatedAccounts: emptyAccountDiffIncrementalMap,
+				CreatedAccounts: emptyAccountMap,
+				DeletedAccounts: emptyAccountMap,
+				UpdatedAccounts: emptyAccountMap,
 			},
 		},
 		{
 			"testBlock0",
 			//10000 transferred from testBankAddress to account1Addr
 			arguments{
-				oldStateRoot: nullHash,
+				oldStateRoot: testhelpers.NullHash,
 				newStateRoot: block0.Root(),
 				blockNumber:  block0.Number(),
 				blockHash:    block0.Hash(),
@@ -334,8 +332,8 @@ func TestBuilder1(t *testing.T) {
 						Storage:   []statediff.StorageDiff{},
 					},
 				},
-				DeletedAccounts: emptyAccountDiffEventualMap,
-				UpdatedAccounts: emptyAccountDiffIncrementalMap,
+				DeletedAccounts: emptyAccountMap,
+				UpdatedAccounts: emptyAccountMap,
 			},
 		},
 		{
@@ -366,7 +364,7 @@ func TestBuilder1(t *testing.T) {
 						Storage:   []statediff.StorageDiff{},
 					},
 				},
-				DeletedAccounts: emptyAccountDiffEventualMap,
+				DeletedAccounts: emptyAccountMap,
 				UpdatedAccounts: []statediff.AccountDiff{
 					{
 						Path:      []byte{'\x00'},
@@ -415,7 +413,7 @@ func TestBuilder1(t *testing.T) {
 						Storage:   []statediff.StorageDiff{},
 					},
 				},
-				DeletedAccounts: emptyAccountDiffEventualMap,
+				DeletedAccounts: emptyAccountMap,
 				UpdatedAccounts: []statediff.AccountDiff{
 					{
 						Path:      []byte{'\x00'},
@@ -455,7 +453,7 @@ func TestBuilder1(t *testing.T) {
 				BlockNumber:     block3.Number(),
 				BlockHash:       block3.Hash(),
 				CreatedAccounts: []statediff.AccountDiff{},
-				DeletedAccounts: emptyAccountDiffEventualMap,
+				DeletedAccounts: emptyAccountMap,
 				UpdatedAccounts: []statediff.AccountDiff{
 					{
 						Path:      []byte{'\x00'},
@@ -497,9 +495,6 @@ func TestBuilder1(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if test.name != "testBlock0" {
-			continue
-		}
 		arguments := test.startingArguments
 		diff, err := builder.BuildStateDiff(arguments.oldStateRoot, arguments.newStateRoot, arguments.blockNumber, arguments.blockHash)
 		if err != nil {
@@ -551,16 +546,16 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber:     block0.Number(),
 				BlockHash:       block0.Hash(),
-				CreatedAccounts: emptyAccountDiffEventualMap,
-				DeletedAccounts: emptyAccountDiffEventualMap,
-				UpdatedAccounts: emptyAccountDiffIncrementalMap,
+				CreatedAccounts: emptyAccountMap,
+				DeletedAccounts: emptyAccountMap,
+				UpdatedAccounts: emptyAccountMap,
 			},
 		},
 		{
 			"testBlock0",
 			//10000 transferred from testBankAddress to account1Addr
 			arguments{
-				oldStateRoot: nullHash,
+				oldStateRoot: testhelpers.NullHash,
 				newStateRoot: block0.Root(),
 				blockNumber:  block0.Number(),
 				blockHash:    block0.Hash(),
@@ -577,8 +572,8 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 						Storage:   []statediff.StorageDiff{},
 					},
 				},
-				DeletedAccounts: emptyAccountDiffEventualMap,
-				UpdatedAccounts: emptyAccountDiffIncrementalMap,
+				DeletedAccounts: emptyAccountMap,
+				UpdatedAccounts: emptyAccountMap,
 			},
 		},
 		{
@@ -615,7 +610,7 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 						Storage:   []statediff.StorageDiff{},
 					},
 				},
-				DeletedAccounts: emptyAccountDiffEventualMap,
+				DeletedAccounts: emptyAccountMap,
 				UpdatedAccounts: []statediff.AccountDiff{
 					{
 						Path:      []byte{'\x00'},
@@ -664,7 +659,7 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 						Storage:   []statediff.StorageDiff{},
 					},
 				},
-				DeletedAccounts: emptyAccountDiffEventualMap,
+				DeletedAccounts: emptyAccountMap,
 				UpdatedAccounts: []statediff.AccountDiff{
 					{
 						Path:      []byte{},
@@ -710,7 +705,7 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 				BlockNumber:     block3.Number(),
 				BlockHash:       block3.Hash(),
 				CreatedAccounts: []statediff.AccountDiff{},
-				DeletedAccounts: emptyAccountDiffEventualMap,
+				DeletedAccounts: emptyAccountMap,
 				UpdatedAccounts: []statediff.AccountDiff{
 					{
 						Path:      []byte{},
@@ -815,16 +810,16 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber:     block0.Number(),
 				BlockHash:       block0.Hash(),
-				CreatedAccounts: emptyAccountDiffEventualMap,
-				DeletedAccounts: emptyAccountDiffEventualMap,
-				UpdatedAccounts: emptyAccountDiffIncrementalMap,
+				CreatedAccounts: emptyAccountMap,
+				DeletedAccounts: emptyAccountMap,
+				UpdatedAccounts: emptyAccountMap,
 			},
 		},
 		{
 			"testBlock0",
 			//10000 transferred from testBankAddress to account1Addr
 			arguments{
-				oldStateRoot: nullHash,
+				oldStateRoot: testhelpers.NullHash,
 				newStateRoot: block0.Root(),
 				blockNumber:  block0.Number(),
 				blockHash:    block0.Hash(),
@@ -832,9 +827,9 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber:     block0.Number(),
 				BlockHash:       block0.Hash(),
-				CreatedAccounts: emptyAccountDiffEventualMap,
-				DeletedAccounts: emptyAccountDiffEventualMap,
-				UpdatedAccounts: emptyAccountDiffIncrementalMap,
+				CreatedAccounts: emptyAccountMap,
+				DeletedAccounts: emptyAccountMap,
+				UpdatedAccounts: emptyAccountMap,
 			},
 		},
 		{
@@ -858,7 +853,7 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 						Storage:   []statediff.StorageDiff{},
 					},
 				},
-				DeletedAccounts: emptyAccountDiffEventualMap,
+				DeletedAccounts: emptyAccountMap,
 				UpdatedAccounts: []statediff.AccountDiff{},
 			},
 		},
@@ -891,7 +886,7 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 						},
 					},
 				},
-				DeletedAccounts: emptyAccountDiffEventualMap,
+				DeletedAccounts: emptyAccountMap,
 				UpdatedAccounts: []statediff.AccountDiff{
 					{
 						Path:      []byte{'\x0e'},
@@ -917,7 +912,7 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 				BlockNumber:     block3.Number(),
 				BlockHash:       block3.Hash(),
 				CreatedAccounts: []statediff.AccountDiff{},
-				DeletedAccounts: emptyAccountDiffEventualMap,
+				DeletedAccounts: emptyAccountMap,
 				UpdatedAccounts: []statediff.AccountDiff{
 					{
 						Path:      []byte{'\x06'},

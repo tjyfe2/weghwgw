@@ -47,6 +47,7 @@ var (
 	StoragePath  = common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes()
 	StorageKey   = common.HexToHash("0000000000000000000000000000000000000000000000000000000000000001").Bytes()
 	StorageValue = common.Hex2Bytes("0x03")
+	NullHash     = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
 
 	Testdb          = rawdb.NewMemoryDatabase()
 	TestBankKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
