@@ -33,8 +33,10 @@ import (
 )
 
 var (
+	emptyStorage                = make([]statediff.StorageDiff, 0)
+	emptyAccounts               = make([]statediff.AccountDiff, 0)
 	block0, block1              *types.Block
-	burnLeafKey                 = testhelpers.AddressToLeafKey(common.HexToAddress("0x0"))
+	minerLeafKey                = testhelpers.AddressToLeafKey(common.HexToAddress("0x0"))
 	emptyAccountDiffEventualMap = make([]statediff.AccountDiff, 0)
 	account1, _                 = rlp.EncodeToBytes(state.Account{
 		Nonce:    uint64(0),
@@ -46,25 +48,35 @@ var (
 		common.Hex2Bytes("3926db69aaced518e9b9f0f434a473e7174109c943548bb8f23be41ca76d9ad2"),
 		account1,
 	})
-	burnAccount1, _ = rlp.EncodeToBytes(state.Account{
+	bankAccountAtBlock0, _ = rlp.EncodeToBytes(state.Account{
+		Nonce:    testhelpers.Nonce0,
+		Balance:  big.NewInt(testhelpers.TestBankFunds.Int64()),
+		CodeHash: testhelpers.NullCodeHash.Bytes(),
+		Root:     testhelpers.EmptyContractRoot,
+	})
+	bankAccountAtBlock0LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+		common.Hex2Bytes("2000bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
+		bankAccountAtBlock0,
+	})
+	minerAccount, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    uint64(0),
 		Balance:  big.NewInt(2000000000000000000),
 		CodeHash: common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
 		Root:     common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 	})
-	burnAccount1LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	minerAccountLeafNode, _ = rlp.EncodeToBytes([]interface{}{
 		common.Hex2Bytes("3380c7b7ae81a58eb98d9c78de4a1fd7fd9535fc953ed2be602daaa41767312a"),
-		burnAccount1,
+		minerAccount,
 	})
-	bankAccount1, _ = rlp.EncodeToBytes(state.Account{
+	bankAccount, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    uint64(1),
 		Balance:  big.NewInt(testhelpers.TestBankFunds.Int64() - 10000),
 		CodeHash: common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
 		Root:     common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 	})
-	bankAccount1LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+	bankAccountLeafNode, _ = rlp.EncodeToBytes([]interface{}{
 		common.Hex2Bytes("30bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
-		bankAccount1,
+		bankAccount,
 	})
 	mockTotalDifficulty = big.NewInt(1337)
 )
@@ -94,28 +106,35 @@ func testSubscriptionAPI(t *testing.T) {
 			{
 				Path:      []byte{'\x05'},
 				NodeType:  statediff.Leaf,
-				LeafKey:   burnLeafKey,
-				NodeValue: burnAccount1LeafNode,
-				Storage:   []statediff.StorageDiff{},
+				LeafKey:   minerLeafKey,
+				NodeValue: minerAccountLeafNode,
+				Storage:   emptyStorage,
 			},
 			{
 				Path:      []byte{'\x0e'},
 				NodeType:  statediff.Leaf,
 				LeafKey:   testhelpers.Account1LeafKey,
 				NodeValue: account1LeafNode,
-				Storage:   []statediff.StorageDiff{},
+				Storage:   emptyStorage,
 			},
-		},
-		DeletedAccounts: emptyAccountDiffEventualMap,
-		UpdatedAccounts: []statediff.AccountDiff{
 			{
 				Path:      []byte{'\x00'},
 				NodeType:  statediff.Leaf,
 				LeafKey:   testhelpers.BankLeafKey,
-				NodeValue: bankAccount1LeafNode,
-				Storage:   []statediff.StorageDiff{},
+				NodeValue: bankAccountLeafNode,
+				Storage:   emptyStorage,
 			},
 		},
+		DeletedAccounts: []statediff.AccountDiff{ // This leaf appears to be deleted since it is turned into a branch node
+			{ // It would instead show up in the UpdateAccounts as new branch node IF intermediate node diffing was turned on (as it is in the test below)
+				Path:      []byte{},
+				NodeType:  statediff.Leaf,
+				LeafKey:   testhelpers.BankLeafKey,
+				NodeValue: bankAccountAtBlock0LeafNode,
+				Storage:   emptyStorage,
+			},
+		},
+		UpdatedAccounts: emptyAccounts,
 	}
 	expectedStateDiffBytes, _ := rlp.EncodeToBytes(expectedStateDiff)
 	blockChan := make(chan *types.Block)
@@ -186,28 +205,35 @@ func testHTTPAPI(t *testing.T) {
 			{
 				Path:      []byte{'\x05'},
 				NodeType:  statediff.Leaf,
-				LeafKey:   burnLeafKey,
-				NodeValue: burnAccount1LeafNode,
-				Storage:   []statediff.StorageDiff{},
+				LeafKey:   minerLeafKey,
+				NodeValue: minerAccountLeafNode,
+				Storage:   emptyStorage,
 			},
 			{
 				Path:      []byte{'\x0e'},
 				NodeType:  statediff.Leaf,
 				LeafKey:   testhelpers.Account1LeafKey,
 				NodeValue: account1LeafNode,
-				Storage:   []statediff.StorageDiff{},
+				Storage:   emptyStorage,
 			},
-		},
-		DeletedAccounts: emptyAccountDiffEventualMap,
-		UpdatedAccounts: []statediff.AccountDiff{
 			{
 				Path:      []byte{'\x00'},
 				NodeType:  statediff.Leaf,
 				LeafKey:   testhelpers.BankLeafKey,
-				NodeValue: bankAccount1LeafNode,
-				Storage:   []statediff.StorageDiff{},
+				NodeValue: bankAccountLeafNode,
+				Storage:   emptyStorage,
 			},
 		},
+		DeletedAccounts: []statediff.AccountDiff{ // This leaf appears to be deleted since it is turned into a branch node
+			{ // It would instead show up in the UpdateAccounts as new branch node IF intermediate node diffing was turned on (as it is in the test below)
+				Path:      []byte{},
+				NodeType:  statediff.Leaf,
+				LeafKey:   testhelpers.BankLeafKey,
+				NodeValue: bankAccountAtBlock0LeafNode,
+				Storage:   emptyStorage,
+			},
+		},
+		UpdatedAccounts: emptyAccounts,
 	}
 	expectedStateDiffBytes, _ := rlp.EncodeToBytes(expectedStateDiff)
 	config := statediff.Config{
