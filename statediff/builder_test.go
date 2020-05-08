@@ -350,6 +350,13 @@ func TestBuilder(t *testing.T) {
 				BlockHash:   block1.Hash(),
 				CreatedAccounts: []statediff.AccountDiff{
 					{
+						Path:      []byte{'\x00'},
+						NodeType:  statediff.Leaf,
+						LeafKey:   testhelpers.BankLeafKey,
+						NodeValue: bankAccountAtBlock1LeafNode,
+						Storage:   []statediff.StorageDiff{},
+					},
+					{
 						Path:      []byte{'\x05'},
 						NodeType:  statediff.Leaf,
 						LeafKey:   minerLeafKey,
@@ -364,16 +371,16 @@ func TestBuilder(t *testing.T) {
 						Storage:   []statediff.StorageDiff{},
 					},
 				},
-				DeletedAccounts: emptyAccountMap,
-				UpdatedAccounts: []statediff.AccountDiff{
-					{
-						Path:      []byte{'\x00'},
+				DeletedAccounts: []statediff.AccountDiff{ // This leaf appears to be deleted since it is turned into a branch node
+					{ // It would instead show up in the UpdateAccounts as new branch node IF intermediate node diffing was turned on (as it is in the test below)
+						Path:      []byte{},
 						NodeType:  statediff.Leaf,
 						LeafKey:   testhelpers.BankLeafKey,
-						NodeValue: bankAccountAtBlock1LeafNode,
+						NodeValue: bankAccountAtBlock0LeafNode,
 						Storage:   []statediff.StorageDiff{},
 					},
 				},
+				UpdatedAccounts: emptyAccountMap,
 			},
 		},
 		{
@@ -590,9 +597,10 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 				BlockHash:   block1.Hash(),
 				CreatedAccounts: []statediff.AccountDiff{
 					{
-						Path:      []byte{},
-						NodeType:  statediff.Branch,
-						NodeValue: block1BranchNode,
+						Path:      []byte{'\x00'},
+						NodeType:  statediff.Leaf,
+						LeafKey:   testhelpers.BankLeafKey,
+						NodeValue: bankAccountAtBlock1LeafNode,
 						Storage:   []statediff.StorageDiff{},
 					},
 					{
@@ -613,10 +621,9 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 				DeletedAccounts: emptyAccountMap,
 				UpdatedAccounts: []statediff.AccountDiff{
 					{
-						Path:      []byte{'\x00'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.BankLeafKey,
-						NodeValue: bankAccountAtBlock1LeafNode,
+						Path:      []byte{},
+						NodeType:  statediff.Branch,
+						NodeValue: block1BranchNode,
 						Storage:   []statediff.StorageDiff{},
 					},
 				},

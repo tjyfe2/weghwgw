@@ -148,6 +148,7 @@ func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (AccountsMap, error
 		if err != nil {
 			return nil, err
 		}
+		nodePathHash := crypto.Keccak256Hash(nodePath)
 		switch ty {
 		case Leaf:
 			var account state.Account
@@ -166,11 +167,11 @@ func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (AccountsMap, error
 					LeafKey:   leafKey,
 					Account:   &account,
 				}
-				diffAccounts[common.BytesToHash(encodedPath)] = aw
+				diffAccounts[nodePathHash] = aw
 			}
 		case Extension, Branch:
 			if sdb.config.IntermediateNodes {
-				diffAccounts[common.BytesToHash(nodePath)] = accountWrapper{
+				diffAccounts[nodePathHash] = accountWrapper{
 					NodeType:  ty,
 					Path:      nodePath,
 					NodeValue: node,
