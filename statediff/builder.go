@@ -89,21 +89,21 @@ func (sdb *builder) BuildStateDiff(oldStateRoot, newStateRoot common.Hash, block
 	if err != nil {
 		return StateDiff{}, fmt.Errorf("error building diff for updated accounts: %v", err)
 	}
-	createdAccounts, err := sdb.buildDiffEventual(creations)
+	createdAccounts, err := sdb.buildDiffCreations(creations)
 	if err != nil {
 		return StateDiff{}, fmt.Errorf("error building diff for created accounts: %v", err)
 	}
-	deletedAccounts, err := sdb.buildDiffEventual(deletions)
+	deletedAccounts, err := sdb.buildDiffDeletions(deletions)
 	if err != nil {
 		return StateDiff{}, fmt.Errorf("error building diff for deleted accounts: %v", err)
 	}
 
 	return StateDiff{
-		BlockNumber:     blockNumber,
-		BlockHash:       blockHash,
-		CreatedAccounts: createdAccounts,
-		DeletedAccounts: deletedAccounts,
-		UpdatedAccounts: updatedAccounts,
+		BlockNumber:  blockNumber,
+		BlockHash:    blockHash,
+		CreatedNodes: createdAccounts,
+		DeletedNodes: deletedAccounts,
+		UpdatedNodes: updatedAccounts,
 	}, nil
 }
 
@@ -184,52 +184,66 @@ func (sdb *builder) collectDiffNodes(a, b trie.NodeIterator) (AccountsMap, error
 	return diffAccounts, nil
 }
 
-func (sdb *builder) buildDiffEventual(accounts AccountsMap) ([]AccountDiff, error) {
-	accountDiffs := make([]AccountDiff, 0)
+func (sdb *builder) buildDiffCreations(accounts AccountsMap) ([]StateNode, error) {
+	accountDiffs := make([]StateNode, 0, len(accounts))
 	var err error
 	for _, val := range accounts {
 		// If account is not nil, we need to process storage diffs
-		var storageDiffs []StorageDiff
+		var storageDiffs []StorageNode
 		if val.Account != nil {
-			storageDiffs, err = sdb.buildStorageDiffsEventual(val.Account.Root)
+			storageDiffs, err = sdb.buildStorageNodesEventual(val.Account.Root)
 			if err != nil {
 				return nil, fmt.Errorf("failed building eventual storage diffs for node %x\r\nerror: %v", val.Path, err)
 			}
 		}
-		accountDiffs = append(accountDiffs, AccountDiff{
-			NodeType:  val.NodeType,
-			Path:      val.Path,
-			LeafKey:   val.LeafKey,
-			NodeValue: val.NodeValue,
-			Storage:   storageDiffs,
+		accountDiffs = append(accountDiffs, StateNode{
+			NodeType:     val.NodeType,
+			Path:         val.Path,
+			LeafKey:      val.LeafKey,
+			NodeValue:    val.NodeValue,
+			StorageDiffs: storageDiffs,
 		})
 	}
 
 	return accountDiffs, nil
 }
 
-func (sdb *builder) buildDiffIncremental(creations AccountsMap, deletions AccountsMap, updatedKeys []string) ([]AccountDiff, error) {
-	updatedAccounts := make([]AccountDiff, 0)
+func (sdb *builder) buildDiffDeletions(accounts AccountsMap) ([]StateNode, error) {
+	accountDiffs := make([]StateNode, 0, len(accounts))
+	for _, val := range accounts {
+		// deleted account can not have storage or it would not be deleted
+		accountDiffs = append(accountDiffs, StateNode{
+			NodeType:  Removed,
+			Path:      val.Path,
+			LeafKey:   val.LeafKey,
+			NodeValue: []byte{},
+		})
+	}
+	return accountDiffs, nil
+}
+
+func (sdb *builder) buildDiffIncremental(creations AccountsMap, deletions AccountsMap, updatedKeys []string) ([]StateNode, error) {
+	updatedAccounts := make([]StateNode, 0, len(updatedKeys))
 	var err error
 	for _, val := range updatedKeys {
 		hashKey := common.HexToHash(val)
 		createdAcc := creations[hashKey]
 		deletedAcc := deletions[hashKey]
-		var storageDiffs []StorageDiff
+		var storageDiffs []StorageNode
 		if deletedAcc.Account != nil && createdAcc.Account != nil {
 			oldSR := deletedAcc.Account.Root
 			newSR := createdAcc.Account.Root
-			storageDiffs, err = sdb.buildStorageDiffsIncremental(oldSR, newSR)
+			storageDiffs, err = sdb.buildStorageNodesIncremental(oldSR, newSR)
 			if err != nil {
 				return nil, fmt.Errorf("failed building incremental storage diffs for %s\r\nerror: %v", hashKey.Hex(), err)
 			}
 		}
-		updatedAccounts = append(updatedAccounts, AccountDiff{
-			NodeType:  createdAcc.NodeType,
-			Path:      createdAcc.Path,
-			NodeValue: createdAcc.NodeValue,
-			LeafKey:   createdAcc.LeafKey,
-			Storage:   storageDiffs,
+		updatedAccounts = append(updatedAccounts, StateNode{
+			NodeType:     createdAcc.NodeType,
+			Path:         createdAcc.Path,
+			NodeValue:    createdAcc.NodeValue,
+			LeafKey:      createdAcc.LeafKey,
+			StorageDiffs: storageDiffs,
 		})
 		delete(creations, common.HexToHash(val))
 		delete(deletions, common.HexToHash(val))
@@ -238,7 +252,10 @@ func (sdb *builder) buildDiffIncremental(creations AccountsMap, deletions Accoun
 	return updatedAccounts, nil
 }
 
-func (sdb *builder) buildStorageDiffsEventual(sr common.Hash) ([]StorageDiff, error) {
+// if an account is moved to a new path that didn't previously have a node, it appears to have been "created"
+// but it actually has a previous state associated with, a previous storage trie, so this would produce the
+// wrong result... it would produce a node for the entire trie, not just the diffs since the last state
+func (sdb *builder) buildStorageNodesEventual(sr common.Hash) ([]StorageNode, error) {
 	log.Debug("Storage Root For Eventual Diff", "root", sr.Hex())
 	stateCache := sdb.blockChain.StateCache()
 	sTrie, err := stateCache.OpenTrie(sr)
@@ -247,10 +264,10 @@ func (sdb *builder) buildStorageDiffsEventual(sr common.Hash) ([]StorageDiff, er
 		return nil, err
 	}
 	it := sTrie.NodeIterator(make([]byte, 0))
-	return sdb.buildStorageDiffsFromTrie(it)
+	return sdb.buildStorageNodesFromTrie(it)
 }
 
-func (sdb *builder) buildStorageDiffsIncremental(oldSR common.Hash, newSR common.Hash) ([]StorageDiff, error) {
+func (sdb *builder) buildStorageNodesIncremental(oldSR common.Hash, newSR common.Hash) ([]StorageNode, error) {
 	log.Debug("Storage Roots for Incremental Diff", "old", oldSR.Hex(), "new", newSR.Hex())
 	stateCache := sdb.blockChain.StateCache()
 
@@ -266,11 +283,11 @@ func (sdb *builder) buildStorageDiffsIncremental(oldSR common.Hash, newSR common
 	oldIt := oldTrie.NodeIterator(make([]byte, 0))
 	newIt := newTrie.NodeIterator(make([]byte, 0))
 	it, _ := trie.NewDifferenceIterator(oldIt, newIt)
-	return sdb.buildStorageDiffsFromTrie(it)
+	return sdb.buildStorageNodesFromTrie(it)
 }
 
-func (sdb *builder) buildStorageDiffsFromTrie(it trie.NodeIterator) ([]StorageDiff, error) {
-	storageDiffs := make([]StorageDiff, 0)
+func (sdb *builder) buildStorageNodesFromTrie(it trie.NodeIterator) ([]StorageNode, error) {
+	storageDiffs := make([]StorageNode, 0)
 	for it.Next(true) {
 		// skip value nodes
 		if it.Leaf() {
@@ -299,7 +316,7 @@ func (sdb *builder) buildStorageDiffsFromTrie(it trie.NodeIterator) ([]StorageDi
 			valueNodePath := append(nodePath, partialPath...)
 			encodedPath := trie.HexToCompact(valueNodePath)
 			leafKey := encodedPath[1:]
-			sd := StorageDiff{
+			sd := StorageNode{
 				NodeType:  ty,
 				Path:      nodePath,
 				NodeValue: node,
@@ -308,7 +325,7 @@ func (sdb *builder) buildStorageDiffsFromTrie(it trie.NodeIterator) ([]StorageDi
 			storageDiffs = append(storageDiffs, sd)
 		case Extension, Branch:
 			if sdb.config.IntermediateNodes {
-				storageDiffs = append(storageDiffs, StorageDiff{
+				storageDiffs = append(storageDiffs, StorageNode{
 					NodeType:  ty,
 					Path:      nodePath,
 					NodeValue: node,

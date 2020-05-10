@@ -65,27 +65,27 @@ func (sd *Payload) Encode() ([]byte, error) {
 
 // StateDiff is the final output structure from the builder
 type StateDiff struct {
-	BlockNumber     *big.Int      `json:"blockNumber"     gencodec:"required"`
-	BlockHash       common.Hash   `json:"blockHash"       gencodec:"required"`
-	CreatedAccounts []AccountDiff `json:"createdAccounts" gencodec:"required"`
-	DeletedAccounts []AccountDiff `json:"deletedAccounts" gencodec:"required"`
-	UpdatedAccounts []AccountDiff `json:"updatedAccounts" gencodec:"required"`
+	BlockNumber  *big.Int    `json:"blockNumber"     gencodec:"required"`
+	BlockHash    common.Hash `json:"blockHash"       gencodec:"required"`
+	CreatedNodes []StateNode `json:"createdAccounts" gencodec:"required"`
+	DeletedNodes []StateNode `json:"deletedAccounts" gencodec:"required"`
+	UpdatedNodes []StateNode `json:"updatedAccounts" gencodec:"required"`
 
 	encoded []byte
 	err     error
 }
 
-// AccountDiff holds the data for a single state diff node
-type AccountDiff struct {
-	NodeType  NodeType      `json:"nodeType"        gencodec:"required"`
-	Path      []byte        `json:"path"         gencodec:"required"`
-	NodeValue []byte        `json:"value"       gencodec:"required"`
-	Storage   []StorageDiff `json:"storage"`
-	LeafKey   []byte        `json:"leafKey"`
+// StateNode holds the data for a single state diff node
+type StateNode struct {
+	NodeType     NodeType      `json:"nodeType"        gencodec:"required"`
+	Path         []byte        `json:"path"         gencodec:"required"`
+	NodeValue    []byte        `json:"value"       gencodec:"required"`
+	StorageDiffs []StorageNode `json:"storage"`
+	LeafKey      []byte        `json:"leafKey"`
 }
 
-// StorageDiff holds the data for a single storage diff node
-type StorageDiff struct {
+// StorageNode holds the data for a single storage diff node
+type StorageNode struct {
 	NodeType  NodeType `json:"nodeType"        gencodec:"required"`
 	Path      []byte   `json:"path"     gencodec:"required"`
 	NodeValue []byte   `json:"value"       gencodec:"required"`
@@ -112,4 +112,5 @@ const (
 	Leaf      NodeType = "Leaf"
 	Extension NodeType = "Extension"
 	Branch    NodeType = "Branch"
+	Removed   NodeType = "Removed" // used to represent nodes which have been deleted (e.g. accounts due to EIp-158)
 )

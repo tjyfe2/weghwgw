@@ -33,12 +33,12 @@ import (
 )
 
 var (
-	emptyStorage                = make([]statediff.StorageDiff, 0)
-	emptyAccounts               = make([]statediff.AccountDiff, 0)
-	block0, block1              *types.Block
-	minerLeafKey                = testhelpers.AddressToLeafKey(common.HexToAddress("0x0"))
-	emptyAccountDiffEventualMap = make([]statediff.AccountDiff, 0)
-	account1, _                 = rlp.EncodeToBytes(state.Account{
+	emptyStorage              = make([]statediff.StorageNode, 0)
+	emptyAccounts             = make([]statediff.StateNode, 0)
+	block0, block1            *types.Block
+	minerLeafKey              = testhelpers.AddressToLeafKey(common.HexToAddress("0x0"))
+	emptyStateNodeEventualMap = make([]statediff.StateNode, 0)
+	account1, _               = rlp.EncodeToBytes(state.Account{
 		Nonce:    uint64(0),
 		Balance:  big.NewInt(10000),
 		CodeHash: common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
@@ -102,39 +102,39 @@ func testSubscriptionAPI(t *testing.T) {
 	expectedStateDiff := statediff.StateDiff{
 		BlockNumber: block1.Number(),
 		BlockHash:   block1.Hash(),
-		CreatedAccounts: []statediff.AccountDiff{
+		CreatedNodes: []statediff.StateNode{
 			{
-				Path:      []byte{'\x05'},
-				NodeType:  statediff.Leaf,
-				LeafKey:   minerLeafKey,
-				NodeValue: minerAccountLeafNode,
-				Storage:   emptyStorage,
+				Path:         []byte{'\x05'},
+				NodeType:     statediff.Leaf,
+				LeafKey:      minerLeafKey,
+				NodeValue:    minerAccountLeafNode,
+				StorageDiffs: emptyStorage,
 			},
 			{
-				Path:      []byte{'\x0e'},
-				NodeType:  statediff.Leaf,
-				LeafKey:   testhelpers.Account1LeafKey,
-				NodeValue: account1LeafNode,
-				Storage:   emptyStorage,
+				Path:         []byte{'\x0e'},
+				NodeType:     statediff.Leaf,
+				LeafKey:      testhelpers.Account1LeafKey,
+				NodeValue:    account1LeafNode,
+				StorageDiffs: emptyStorage,
 			},
 			{
-				Path:      []byte{'\x00'},
-				NodeType:  statediff.Leaf,
-				LeafKey:   testhelpers.BankLeafKey,
-				NodeValue: bankAccountLeafNode,
-				Storage:   emptyStorage,
+				Path:         []byte{'\x00'},
+				NodeType:     statediff.Leaf,
+				LeafKey:      testhelpers.BankLeafKey,
+				NodeValue:    bankAccountLeafNode,
+				StorageDiffs: emptyStorage,
 			},
 		},
-		DeletedAccounts: []statediff.AccountDiff{ // This leaf appears to be deleted since it is turned into a branch node
+		DeletedNodes: []statediff.StateNode{ // This leaf appears to be deleted since it is turned into a branch node
 			{ // It would instead show up in the UpdateAccounts as new branch node IF intermediate node diffing was turned on (as it is in the test below)
-				Path:      []byte{},
-				NodeType:  statediff.Leaf,
-				LeafKey:   testhelpers.BankLeafKey,
-				NodeValue: bankAccountAtBlock0LeafNode,
-				Storage:   emptyStorage,
+				Path:         []byte{},
+				NodeType:     statediff.Removed,
+				LeafKey:      testhelpers.BankLeafKey,
+				NodeValue:    []byte{},
+				StorageDiffs: emptyStorage,
 			},
 		},
-		UpdatedAccounts: emptyAccounts,
+		UpdatedNodes: emptyAccounts,
 	}
 	expectedStateDiffBytes, _ := rlp.EncodeToBytes(expectedStateDiff)
 	blockChan := make(chan *types.Block)
@@ -201,39 +201,39 @@ func testHTTPAPI(t *testing.T) {
 	expectedStateDiff := statediff.StateDiff{
 		BlockNumber: block1.Number(),
 		BlockHash:   block1.Hash(),
-		CreatedAccounts: []statediff.AccountDiff{
+		CreatedNodes: []statediff.StateNode{
 			{
-				Path:      []byte{'\x05'},
-				NodeType:  statediff.Leaf,
-				LeafKey:   minerLeafKey,
-				NodeValue: minerAccountLeafNode,
-				Storage:   emptyStorage,
+				Path:         []byte{'\x05'},
+				NodeType:     statediff.Leaf,
+				LeafKey:      minerLeafKey,
+				NodeValue:    minerAccountLeafNode,
+				StorageDiffs: emptyStorage,
 			},
 			{
-				Path:      []byte{'\x0e'},
-				NodeType:  statediff.Leaf,
-				LeafKey:   testhelpers.Account1LeafKey,
-				NodeValue: account1LeafNode,
-				Storage:   emptyStorage,
+				Path:         []byte{'\x0e'},
+				NodeType:     statediff.Leaf,
+				LeafKey:      testhelpers.Account1LeafKey,
+				NodeValue:    account1LeafNode,
+				StorageDiffs: emptyStorage,
 			},
 			{
-				Path:      []byte{'\x00'},
-				NodeType:  statediff.Leaf,
-				LeafKey:   testhelpers.BankLeafKey,
-				NodeValue: bankAccountLeafNode,
-				Storage:   emptyStorage,
+				Path:         []byte{'\x00'},
+				NodeType:     statediff.Leaf,
+				LeafKey:      testhelpers.BankLeafKey,
+				NodeValue:    bankAccountLeafNode,
+				StorageDiffs: emptyStorage,
 			},
 		},
-		DeletedAccounts: []statediff.AccountDiff{ // This leaf appears to be deleted since it is turned into a branch node
+		DeletedNodes: []statediff.StateNode{ // This leaf appears to be deleted since it is turned into a branch node
 			{ // It would instead show up in the UpdateAccounts as new branch node IF intermediate node diffing was turned on (as it is in the test below)
-				Path:      []byte{},
-				NodeType:  statediff.Leaf,
-				LeafKey:   testhelpers.BankLeafKey,
-				NodeValue: bankAccountAtBlock0LeafNode,
-				Storage:   emptyStorage,
+				Path:         []byte{},
+				NodeType:     statediff.Removed,
+				LeafKey:      testhelpers.BankLeafKey,
+				NodeValue:    []byte{},
+				StorageDiffs: emptyStorage,
 			},
 		},
-		UpdatedAccounts: emptyAccounts,
+		UpdatedNodes: emptyAccounts,
 	}
 	expectedStateDiffBytes, _ := rlp.EncodeToBytes(expectedStateDiff)
 	config := statediff.Config{

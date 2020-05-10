@@ -26,7 +26,7 @@ import (
 )
 
 func sortKeys(data AccountsMap) []string {
-	var keys []string
+	keys := make([]string, 0, len(data))
 	for key := range data {
 		keys = append(keys, key.Hex())
 	}
@@ -35,7 +35,8 @@ func sortKeys(data AccountsMap) []string {
 	return keys
 }
 
-// findIntersection finds the set of strings from both arrays that are equivalent (same key as same index)
+// findIntersection finds the set of strings from both arrays that are equivalent
+// a and b must first be sorted
 // this is used to find which keys have been both "deleted" and "created" i.e. they were updated
 func findIntersection(a, b []string) []string {
 	lenA := len(a)

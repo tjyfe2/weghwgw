@@ -47,8 +47,8 @@ var (
 	block1CoinbaseAddr, block2CoinbaseAddr, block3CoinbaseAddr common.Address
 	block1CoinbaseHash, block2CoinbaseHash, block3CoinbaseHash common.Hash
 	builder                                                    statediff.Builder
-	emptyAccounts                                              = make([]statediff.AccountDiff, 0)
-	emptyStorage                                               = make([]statediff.StorageDiff, 0)
+	emptyAccounts                                              = make([]statediff.StateNode, 0)
+	emptyStorage                                               = make([]statediff.StorageNode, 0)
 
 	// block 1 data
 	block1CoinbaseAccount, _ = rlp.EncodeToBytes(state.Account{
@@ -498,34 +498,34 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber: block1.Number(),
 				BlockHash:   block1.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{
+				CreatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{'\x04', '\x0b', '\x0e'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   block1CoinbaseHash.Bytes(),
-						NodeValue: block1CoinbaseLeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x04', '\x0b', '\x0e'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      block1CoinbaseHash.Bytes(),
+						NodeValue:    block1CoinbaseLeafNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: []statediff.AccountDiff{
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block1RootBranchNode,
+						Path:         []byte{},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block1RootBranchNode,
 					},
 					{
-						Path:      []byte{'\x04'},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block1x04BranchNode,
+						Path:         []byte{'\x04'},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block1x04BranchNode,
 					},
 					{
-						Path:      []byte{'\x04', '\x0b'},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block1x040bBranchNode,
+						Path:         []byte{'\x04', '\x0b'},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block1x040bBranchNode,
 					},
 				},
 			},
@@ -544,50 +544,50 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber: block2.Number(),
 				BlockHash:   block2.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{
-					// this new leaf at x00 x08 x0d x00 was created when a premine account (leaf) was moved from path x00 x08 x0d
+				CreatedNodes: []statediff.StateNode{
+					// this new leaf at x00 x08 x0d x00 was "created" when a premine account (leaf) was moved from path x00 x08 x0d
 					// this occurred because of the creation of the new coinbase receiving account (leaf) at x00 x08 x0d x04
 					// which necessitates we create a branch at x00 x08 x0d (as shown in the below UpdateAccounts)
 					{
-						Path:      []byte{'\x00', '\x08', '\x0d', '\x00'},
-						NodeType:  statediff.Leaf,
-						Storage:   emptyStorage,
-						LeafKey:   common.HexToHash("08d0f2e24db7943eab4415f99e109698863b0fecca1cf9ffc500f38cefbbe29e").Bytes(),
-						NodeValue: block2MovedPremineLeafNode,
+						Path:         []byte{'\x00', '\x08', '\x0d', '\x00'},
+						NodeType:     statediff.Leaf,
+						StorageDiffs: emptyStorage,
+						LeafKey:      common.HexToHash("08d0f2e24db7943eab4415f99e109698863b0fecca1cf9ffc500f38cefbbe29e").Bytes(),
+						NodeValue:    block2MovedPremineLeafNode,
 					},
 					{
-						Path:      []byte{'\x00', '\x08', '\x0d', '\x04'},
-						NodeType:  statediff.Leaf,
-						Storage:   emptyStorage,
-						LeafKey:   block2CoinbaseHash.Bytes(),
-						NodeValue: block2CoinbaseLeafNode,
+						Path:         []byte{'\x00', '\x08', '\x0d', '\x04'},
+						NodeType:     statediff.Leaf,
+						StorageDiffs: emptyStorage,
+						LeafKey:      block2CoinbaseHash.Bytes(),
+						NodeValue:    block2CoinbaseLeafNode,
 					},
 				},
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: []statediff.AccountDiff{
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block2RootBranchNode,
+						Path:         []byte{},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block2RootBranchNode,
 					},
 					{
-						Path:      []byte{'\x00'},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block2x00BranchNode,
+						Path:         []byte{'\x00'},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block2x00BranchNode,
 					},
 					{
-						Path:      []byte{'\x00', '\x08'},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block2x0008BranchNode,
+						Path:         []byte{'\x00', '\x08'},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block2x0008BranchNode,
 					},
 					{
-						Path:      []byte{'\x00', '\x08', '\x0d'},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block2x00080dBranchNode,
+						Path:         []byte{'\x00', '\x08', '\x0d'},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block2x00080dBranchNode,
 					},
 				},
 			},
@@ -605,72 +605,72 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber: block3.Number(),
 				BlockHash:   block3.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{
+				CreatedNodes: []statediff.StateNode{
 					{ // How was this account created???
-						Path:      []byte{'\x0c', '\x0e', '\x05', '\x07', '\x03'},
-						NodeType:  statediff.Leaf,
-						Storage:   emptyStorage,
-						LeafKey:   common.HexToHash("ce573ced93917e658d10e2d9009470dad72b63c898d173721194a12f2ae5e190").Bytes(),
-						NodeValue: block3MovedPremineLeafNode1,
+						Path:         []byte{'\x0c', '\x0e', '\x05', '\x07', '\x03'},
+						NodeType:     statediff.Leaf,
+						StorageDiffs: emptyStorage,
+						LeafKey:      common.HexToHash("ce573ced93917e658d10e2d9009470dad72b63c898d173721194a12f2ae5e190").Bytes(),
+						NodeValue:    block3MovedPremineLeafNode1,
 					},
 					{ // This account (leaf) used to be at 0c 0e 05 07, not sure why it moves...
-						Path:      []byte{'\x0c', '\x0e', '\x05', '\x07', '\x08'},
-						NodeType:  statediff.Leaf,
-						Storage:   emptyStorage,
-						LeafKey:   common.HexToHash("ce5783bc1e69eedf90f402e11f6862da14ed8e50156635a04d6393bbae154012").Bytes(),
-						NodeValue: block3MovedPremineLeafNode2,
+						Path:         []byte{'\x0c', '\x0e', '\x05', '\x07', '\x08'},
+						NodeType:     statediff.Leaf,
+						StorageDiffs: emptyStorage,
+						LeafKey:      common.HexToHash("ce5783bc1e69eedf90f402e11f6862da14ed8e50156635a04d6393bbae154012").Bytes(),
+						NodeValue:    block3MovedPremineLeafNode2,
 					},
 					{ // this is the new account created due to the coinbase mining a block, it's creation shouldn't affect 0x 0e 05 07
-						Path:      []byte{'\x06', '\x0e', '\x0f'},
-						NodeType:  statediff.Leaf,
-						Storage:   emptyStorage,
-						LeafKey:   block3CoinbaseHash.Bytes(),
-						NodeValue: block3CoinbaseLeafNode,
+						Path:         []byte{'\x06', '\x0e', '\x0f'},
+						NodeType:     statediff.Leaf,
+						StorageDiffs: emptyStorage,
+						LeafKey:      block3CoinbaseHash.Bytes(),
+						NodeValue:    block3CoinbaseLeafNode,
 					},
 				},
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: []statediff.AccountDiff{
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block3RootBranchNode,
+						Path:         []byte{},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block3RootBranchNode,
 					},
 					{
-						Path:      []byte{'\x06'},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block3x06BranchNode,
+						Path:         []byte{'\x06'},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block3x06BranchNode,
 					},
 					{
-						Path:      []byte{'\x06', '\x0e'},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block3x060eBranchNode,
+						Path:         []byte{'\x06', '\x0e'},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block3x060eBranchNode,
 					},
 					{
-						Path:      []byte{'\x0c'},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block3x0cBranchNode,
+						Path:         []byte{'\x0c'},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block3x0cBranchNode,
 					},
 					{
-						Path:      []byte{'\x0c', '\x0e'},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block3x0c0eBranchNode,
+						Path:         []byte{'\x0c', '\x0e'},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block3x0c0eBranchNode,
 					},
 					{
-						Path:      []byte{'\x0c', '\x0e', '\x05'},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block3x0c0e05BranchNode,
+						Path:         []byte{'\x0c', '\x0e', '\x05'},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block3x0c0e05BranchNode,
 					},
 					{
-						Path:      []byte{'\x0c', '\x0e', '\x05', '\x07'},
-						NodeType:  statediff.Branch,
-						Storage:   emptyStorage,
-						NodeValue: block3x0c0e0507BranchNode,
+						Path:         []byte{'\x0c', '\x0e', '\x05', '\x07'},
+						NodeType:     statediff.Branch,
+						StorageDiffs: emptyStorage,
+						NodeValue:    block3x0c0e0507BranchNode,
 					},
 				},
 			},

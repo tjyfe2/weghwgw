@@ -34,8 +34,8 @@ import (
 // TODO: add test that filters on address
 var (
 	contractLeafKey                []byte
-	emptyAccounts                  = make([]statediff.AccountDiff, 0)
-	emptyStorage                   = make([]statediff.StorageDiff, 0)
+	emptyAccounts                  = make([]statediff.StateNode, 0)
+	emptyStorage                   = make([]statediff.StorageNode, 0)
 	block0, block1, block2, block3 *types.Block
 	builder                        statediff.Builder
 	miningReward                   = int64(2000000000000000000)
@@ -300,11 +300,11 @@ func TestBuilder(t *testing.T) {
 				blockHash:    block0.Hash(),
 			},
 			&statediff.StateDiff{
-				BlockNumber:     block0.Number(),
-				BlockHash:       block0.Hash(),
-				CreatedAccounts: emptyAccounts,
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: emptyAccounts,
+				BlockNumber:  block0.Number(),
+				BlockHash:    block0.Hash(),
+				CreatedNodes: emptyAccounts,
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: emptyAccounts,
 			},
 		},
 		{
@@ -319,17 +319,17 @@ func TestBuilder(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber: block0.Number(),
 				BlockHash:   block0.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{
+				CreatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.BankLeafKey,
-						NodeValue: bankAccountAtBlock0LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.BankLeafKey,
+						NodeValue:    bankAccountAtBlock0LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: emptyAccounts,
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: emptyAccounts,
 			},
 		},
 		{
@@ -344,39 +344,39 @@ func TestBuilder(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber: block1.Number(),
 				BlockHash:   block1.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{
+				CreatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{'\x00'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.BankLeafKey,
-						NodeValue: bankAccountAtBlock1LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x00'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.BankLeafKey,
+						NodeValue:    bankAccountAtBlock1LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 					{
-						Path:      []byte{'\x05'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   minerLeafKey,
-						NodeValue: minerAccountAtBlock1LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x05'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      minerLeafKey,
+						NodeValue:    minerAccountAtBlock1LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 					{
-						Path:      []byte{'\x0e'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.Account1LeafKey,
-						NodeValue: account1AtBlock1LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x0e'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.Account1LeafKey,
+						NodeValue:    account1AtBlock1LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedAccounts: []statediff.AccountDiff{ // This leaf appears to be deleted since it is turned into a branch node
+				DeletedNodes: []statediff.StateNode{ // This leaf appears to be deleted since it is turned into a branch node and the account is moved to \x00
 					{ // It would instead show up in the UpdateAccounts as new branch node IF intermediate node diffing was turned on (as it is in the test below)
-						Path:      []byte{},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.BankLeafKey,
-						NodeValue: bankAccountAtBlock0LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{},
+						NodeType:     statediff.Removed,
+						LeafKey:      testhelpers.BankLeafKey,
+						NodeValue:    []byte{},
+						StorageDiffs: emptyStorage,
 					},
 				},
-				UpdatedAccounts: emptyAccounts,
+				UpdatedNodes: emptyAccounts,
 			},
 		},
 		{
@@ -393,13 +393,13 @@ func TestBuilder(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber: block2.Number(),
 				BlockHash:   block2.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{
+				CreatedNodes: []statediff.StateNode{
 					{
 						Path:      []byte{'\x06'},
 						NodeType:  statediff.Leaf,
 						LeafKey:   contractLeafKey,
 						NodeValue: contractAccountAtBlock2LeafNode,
-						Storage: []statediff.StorageDiff{
+						StorageDiffs: []statediff.StorageNode{
 							{
 								Path:      []byte{},
 								NodeType:  statediff.Leaf,
@@ -409,35 +409,35 @@ func TestBuilder(t *testing.T) {
 						},
 					},
 					{
-						Path:      []byte{'\x0c'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.Account2LeafKey,
-						NodeValue: account2AtBlock2LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x0c'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.Account2LeafKey,
+						NodeValue:    account2AtBlock2LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: []statediff.AccountDiff{
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{'\x00'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.BankLeafKey,
-						NodeValue: bankAccountAtBlock2LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x00'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.BankLeafKey,
+						NodeValue:    bankAccountAtBlock2LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 					{
-						Path:      []byte{'\x05'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   minerLeafKey,
-						NodeValue: minerAccountAtBlock2LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x05'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      minerLeafKey,
+						NodeValue:    minerAccountAtBlock2LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 					{
-						Path:      []byte{'\x0e'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.Account1LeafKey,
-						NodeValue: account1AtBlock2LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x0e'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.Account1LeafKey,
+						NodeValue:    account1AtBlock2LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
 			},
@@ -453,24 +453,24 @@ func TestBuilder(t *testing.T) {
 				blockHash:    block3.Hash(),
 			},
 			&statediff.StateDiff{
-				BlockNumber:     block3.Number(),
-				BlockHash:       block3.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{},
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: []statediff.AccountDiff{
+				BlockNumber:  block3.Number(),
+				BlockHash:    block3.Hash(),
+				CreatedNodes: []statediff.StateNode{},
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{'\x00'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.BankLeafKey,
-						NodeValue: bankAccountAtBlock3LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x00'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.BankLeafKey,
+						NodeValue:    bankAccountAtBlock3LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 					{
 						Path:      []byte{'\x06'},
 						NodeType:  statediff.Leaf,
 						LeafKey:   contractLeafKey,
 						NodeValue: contractAccountAtBlock3LeafNode,
-						Storage: []statediff.StorageDiff{
+						StorageDiffs: []statediff.StorageNode{
 							{
 								Path:      []byte{'\x02'},
 								NodeType:  statediff.Leaf,
@@ -486,11 +486,11 @@ func TestBuilder(t *testing.T) {
 						},
 					},
 					{
-						Path:      []byte{'\x0c'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.Account2LeafKey,
-						NodeValue: account2AtBlock3LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x0c'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.Account2LeafKey,
+						NodeValue:    account2AtBlock3LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
 			},
@@ -547,11 +547,11 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 				blockHash:    block0.Hash(),
 			},
 			&statediff.StateDiff{
-				BlockNumber:     block0.Number(),
-				BlockHash:       block0.Hash(),
-				CreatedAccounts: emptyAccounts,
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: emptyAccounts,
+				BlockNumber:  block0.Number(),
+				BlockHash:    block0.Hash(),
+				CreatedNodes: emptyAccounts,
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: emptyAccounts,
 			},
 		},
 		{
@@ -566,17 +566,17 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber: block0.Number(),
 				BlockHash:   block0.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{
+				CreatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.BankLeafKey,
-						NodeValue: bankAccountAtBlock0LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.BankLeafKey,
+						NodeValue:    bankAccountAtBlock0LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: emptyAccounts,
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: emptyAccounts,
 			},
 		},
 		{
@@ -591,36 +591,36 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber: block1.Number(),
 				BlockHash:   block1.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{
+				CreatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{'\x00'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.BankLeafKey,
-						NodeValue: bankAccountAtBlock1LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x00'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.BankLeafKey,
+						NodeValue:    bankAccountAtBlock1LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 					{
-						Path:      []byte{'\x05'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   minerLeafKey,
-						NodeValue: minerAccountAtBlock1LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x05'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      minerLeafKey,
+						NodeValue:    minerAccountAtBlock1LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 					{
-						Path:      []byte{'\x0e'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.Account1LeafKey,
-						NodeValue: account1AtBlock1LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x0e'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.Account1LeafKey,
+						NodeValue:    account1AtBlock1LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: []statediff.AccountDiff{
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{},
-						NodeType:  statediff.Branch,
-						NodeValue: block1BranchNode,
-						Storage:   emptyStorage,
+						Path:         []byte{},
+						NodeType:     statediff.Branch,
+						NodeValue:    block1BranchNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
 			},
@@ -639,13 +639,13 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber: block2.Number(),
 				BlockHash:   block2.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{
+				CreatedNodes: []statediff.StateNode{
 					{
 						Path:      []byte{'\x06'},
 						NodeType:  statediff.Leaf,
 						LeafKey:   contractLeafKey,
 						NodeValue: contractAccountAtBlock2LeafNode,
-						Storage: []statediff.StorageDiff{
+						StorageDiffs: []statediff.StorageNode{
 							{
 								Path:      []byte{},
 								NodeType:  statediff.Leaf,
@@ -655,41 +655,41 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 						},
 					},
 					{
-						Path:      []byte{'\x0c'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.Account2LeafKey,
-						NodeValue: account2AtBlock2LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x0c'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.Account2LeafKey,
+						NodeValue:    account2AtBlock2LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: []statediff.AccountDiff{
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{},
-						NodeType:  statediff.Branch,
-						NodeValue: block2BranchNode,
-						Storage:   emptyStorage,
+						Path:         []byte{},
+						NodeType:     statediff.Branch,
+						NodeValue:    block2BranchNode,
+						StorageDiffs: emptyStorage,
 					},
 					{
-						Path:      []byte{'\x00'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.BankLeafKey,
-						NodeValue: bankAccountAtBlock2LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x00'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.BankLeafKey,
+						NodeValue:    bankAccountAtBlock2LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 					{
-						Path:      []byte{'\x05'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   minerLeafKey,
-						NodeValue: minerAccountAtBlock2LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x05'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      minerLeafKey,
+						NodeValue:    minerAccountAtBlock2LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 					{
-						Path:      []byte{'\x0e'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.Account1LeafKey,
-						NodeValue: account1AtBlock2LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x0e'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.Account1LeafKey,
+						NodeValue:    account1AtBlock2LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
 			},
@@ -705,30 +705,30 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 				blockHash:    block3.Hash(),
 			},
 			&statediff.StateDiff{
-				BlockNumber:     block3.Number(),
-				BlockHash:       block3.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{},
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: []statediff.AccountDiff{
+				BlockNumber:  block3.Number(),
+				BlockHash:    block3.Hash(),
+				CreatedNodes: []statediff.StateNode{},
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{},
-						NodeType:  statediff.Branch,
-						NodeValue: block3BranchNode,
-						Storage:   emptyStorage,
+						Path:         []byte{},
+						NodeType:     statediff.Branch,
+						NodeValue:    block3BranchNode,
+						StorageDiffs: emptyStorage,
 					},
 					{
-						Path:      []byte{'\x00'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.BankLeafKey,
-						NodeValue: bankAccountAtBlock3LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x00'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.BankLeafKey,
+						NodeValue:    bankAccountAtBlock3LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 					{
 						Path:      []byte{'\x06'},
 						NodeType:  statediff.Leaf,
 						LeafKey:   contractLeafKey,
 						NodeValue: contractAccountAtBlock3LeafNode,
-						Storage: []statediff.StorageDiff{
+						StorageDiffs: []statediff.StorageNode{
 							{
 								Path:      []byte{},
 								NodeType:  statediff.Branch,
@@ -749,11 +749,11 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 						},
 					},
 					{
-						Path:      []byte{'\x0c'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.Account2LeafKey,
-						NodeValue: account2AtBlock3LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x0c'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.Account2LeafKey,
+						NodeValue:    account2AtBlock3LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
 			},
@@ -811,11 +811,11 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 				blockHash:    block0.Hash(),
 			},
 			&statediff.StateDiff{
-				BlockNumber:     block0.Number(),
-				BlockHash:       block0.Hash(),
-				CreatedAccounts: emptyAccounts,
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: emptyAccounts,
+				BlockNumber:  block0.Number(),
+				BlockHash:    block0.Hash(),
+				CreatedNodes: emptyAccounts,
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: emptyAccounts,
 			},
 		},
 		{
@@ -828,11 +828,11 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 				blockHash:    block0.Hash(),
 			},
 			&statediff.StateDiff{
-				BlockNumber:     block0.Number(),
-				BlockHash:       block0.Hash(),
-				CreatedAccounts: emptyAccounts,
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: emptyAccounts,
+				BlockNumber:  block0.Number(),
+				BlockHash:    block0.Hash(),
+				CreatedNodes: emptyAccounts,
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: emptyAccounts,
 			},
 		},
 		{
@@ -847,17 +847,17 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber: block1.Number(),
 				BlockHash:   block1.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{
+				CreatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{'\x0e'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.Account1LeafKey,
-						NodeValue: account1AtBlock1LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x0e'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.Account1LeafKey,
+						NodeValue:    account1AtBlock1LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: []statediff.AccountDiff{},
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: []statediff.StateNode{},
 			},
 		},
 		{
@@ -873,13 +873,13 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 			&statediff.StateDiff{
 				BlockNumber: block2.Number(),
 				BlockHash:   block2.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{
+				CreatedNodes: []statediff.StateNode{
 					{
 						Path:      []byte{'\x06'},
 						NodeType:  statediff.Leaf,
 						LeafKey:   contractLeafKey,
 						NodeValue: contractAccountAtBlock2LeafNode,
-						Storage: []statediff.StorageDiff{
+						StorageDiffs: []statediff.StorageNode{
 							{
 								Path:      []byte{},
 								NodeType:  statediff.Leaf,
@@ -889,14 +889,14 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 						},
 					},
 				},
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: []statediff.AccountDiff{
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: []statediff.StateNode{
 					{
-						Path:      []byte{'\x0e'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   testhelpers.Account1LeafKey,
-						NodeValue: account1AtBlock2LeafNode,
-						Storage:   emptyStorage,
+						Path:         []byte{'\x0e'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.Account1LeafKey,
+						NodeValue:    account1AtBlock2LeafNode,
+						StorageDiffs: emptyStorage,
 					},
 				},
 			},
@@ -912,17 +912,17 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 				blockHash:    block3.Hash(),
 			},
 			&statediff.StateDiff{
-				BlockNumber:     block3.Number(),
-				BlockHash:       block3.Hash(),
-				CreatedAccounts: []statediff.AccountDiff{},
-				DeletedAccounts: emptyAccounts,
-				UpdatedAccounts: []statediff.AccountDiff{
+				BlockNumber:  block3.Number(),
+				BlockHash:    block3.Hash(),
+				CreatedNodes: []statediff.StateNode{},
+				DeletedNodes: emptyAccounts,
+				UpdatedNodes: []statediff.StateNode{
 					{
 						Path:      []byte{'\x06'},
 						NodeType:  statediff.Leaf,
 						LeafKey:   contractLeafKey,
 						NodeValue: contractAccountAtBlock3LeafNode,
-						Storage: []statediff.StorageDiff{
+						StorageDiffs: []statediff.StorageNode{
 							{
 								Path:      []byte{'\x02'},
 								NodeType:  statediff.Leaf,
