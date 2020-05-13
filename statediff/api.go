@@ -44,7 +44,7 @@ func NewPublicStateDiffAPI(sds IService) *PublicStateDiffAPI {
 }
 
 // Stream is the public method to setup a subscription that fires off statediff service payloads as they are created
-func (api *PublicStateDiffAPI) Stream(ctx context.Context) (*rpc.Subscription, error) {
+func (api *PublicStateDiffAPI) Stream(ctx context.Context, params Params) (*rpc.Subscription, error) {
 	// ensure that the RPC connection supports subscriptions
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -58,7 +58,7 @@ func (api *PublicStateDiffAPI) Stream(ctx context.Context) (*rpc.Subscription, e
 		// subscribe to events from the statediff service
 		payloadChannel := make(chan Payload, chainEventChanSize)
 		quitChan := make(chan bool, 1)
-		api.sds.Subscribe(rpcSub.ID, payloadChannel, quitChan)
+		api.sds.Subscribe(rpcSub.ID, payloadChannel, quitChan, params)
 		// loop and await payloads and relay them to the subscriber with the notifier
 		for {
 			select {
@@ -91,6 +91,6 @@ func (api *PublicStateDiffAPI) Stream(ctx context.Context) (*rpc.Subscription, e
 }
 
 // StateDiffAt returns a statediff payload at the specific blockheight
-func (api *PublicStateDiffAPI) StateDiffAt(ctx context.Context, blockNumber uint64) (*Payload, error) {
-	return api.sds.StateDiffAt(blockNumber)
+func (api *PublicStateDiffAPI) StateDiffAt(ctx context.Context, blockNumber uint64, params Params) (*Payload, error) {
+	return api.sds.StateDiffAt(blockNumber, params)
 }
