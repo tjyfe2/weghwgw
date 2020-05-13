@@ -34,7 +34,7 @@ import (
 // TODO: add test that filters on address
 var (
 	contractLeafKey                []byte
-	emptyAccounts                  = make([]statediff.StateNode, 0)
+	emptyDiffs                     = make([]statediff.StateNode, 0)
 	emptyStorage                   = make([]statediff.StorageNode, 0)
 	block0, block1, block2, block3 *types.Block
 	builder                        statediff.Builder
@@ -266,60 +266,49 @@ var (
 	})
 )
 
-type arguments struct {
-	oldStateRoot common.Hash
-	newStateRoot common.Hash
-	blockNumber  *big.Int
-	blockHash    common.Hash
-}
-
 func TestBuilder(t *testing.T) {
-	blockHashes, blockMap, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
+	BlockHashes, blockMap, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
 	contractLeafKey = testhelpers.AddressToLeafKey(testhelpers.ContractAddr)
 	defer chain.Stop()
-	block0 = blockMap[blockHashes[3]]
-	block1 = blockMap[blockHashes[2]]
-	block2 = blockMap[blockHashes[1]]
-	block3 = blockMap[blockHashes[0]]
-	config := statediff.Config{
-		IntermediateNodes: false,
-	}
-	builder = statediff.NewBuilder(chain, config)
+	block0 = blockMap[BlockHashes[3]]
+	block1 = blockMap[BlockHashes[2]]
+	block2 = blockMap[BlockHashes[1]]
+	block3 = blockMap[BlockHashes[0]]
+	params := statediff.Params{}
+	builder = statediff.NewBuilder(chain.StateCache())
 
 	var tests = []struct {
 		name              string
-		startingArguments arguments
+		startingArguments statediff.Args
 		expected          *statediff.StateDiff
 	}{
 		{
 			"testEmptyDiff",
-			arguments{
-				oldStateRoot: block0.Root(),
-				newStateRoot: block0.Root(),
-				blockNumber:  block0.Number(),
-				blockHash:    block0.Hash(),
-			},
-			&statediff.StateDiff{
+			statediff.Args{
+				OldStateRoot: block0.Root(),
+				NewStateRoot: block0.Root(),
 				BlockNumber:  block0.Number(),
 				BlockHash:    block0.Hash(),
-				CreatedNodes: emptyAccounts,
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: emptyAccounts,
+			},
+			&statediff.StateDiff{
+				BlockNumber: block0.Number(),
+				BlockHash:   block0.Hash(),
+				Nodes:       emptyDiffs,
 			},
 		},
 		{
 			"testBlock0",
 			//10000 transferred from testBankAddress to account1Addr
-			arguments{
-				oldStateRoot: testhelpers.NullHash,
-				newStateRoot: block0.Root(),
-				blockNumber:  block0.Number(),
-				blockHash:    block0.Hash(),
+			statediff.Args{
+				OldStateRoot: testhelpers.NullHash,
+				NewStateRoot: block0.Root(),
+				BlockNumber:  block0.Number(),
+				BlockHash:    block0.Hash(),
 			},
 			&statediff.StateDiff{
 				BlockNumber: block0.Number(),
 				BlockHash:   block0.Hash(),
-				CreatedNodes: []statediff.StateNode{
+				Nodes: []statediff.StateNode{
 					{
 						Path:         []byte{},
 						NodeType:     statediff.Leaf,
@@ -328,23 +317,21 @@ func TestBuilder(t *testing.T) {
 						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: emptyAccounts,
 			},
 		},
 		{
 			"testBlock1",
 			//10000 transferred from testBankAddress to account1Addr
-			arguments{
-				oldStateRoot: block0.Root(),
-				newStateRoot: block1.Root(),
-				blockNumber:  block1.Number(),
-				blockHash:    block1.Hash(),
+			statediff.Args{
+				OldStateRoot: block0.Root(),
+				NewStateRoot: block1.Root(),
+				BlockNumber:  block1.Number(),
+				BlockHash:    block1.Hash(),
 			},
 			&statediff.StateDiff{
 				BlockNumber: block1.Number(),
 				BlockHash:   block1.Hash(),
-				CreatedNodes: []statediff.StateNode{
+				Nodes: []statediff.StateNode{
 					{
 						Path:         []byte{'\x00'},
 						NodeType:     statediff.Leaf,
@@ -367,16 +354,6 @@ func TestBuilder(t *testing.T) {
 						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedNodes: []statediff.StateNode{ // This leaf appears to be deleted since it is turned into a branch node and the account is moved to \x00
-					{ // It would instead show up in the UpdateAccounts as new branch node IF intermediate node diffing was turned on (as it is in the test below)
-						Path:         []byte{},
-						NodeType:     statediff.Removed,
-						LeafKey:      testhelpers.BankLeafKey,
-						NodeValue:    []byte{},
-						StorageDiffs: emptyStorage,
-					},
-				},
-				UpdatedNodes: emptyAccounts,
 			},
 		},
 		{
@@ -384,16 +361,37 @@ func TestBuilder(t *testing.T) {
 			// 1000 transferred from testBankAddress to account1Addr
 			// 1000 transferred from account1Addr to account2Addr
 			// account1addr creates a new contract
-			arguments{
-				oldStateRoot: block1.Root(),
-				newStateRoot: block2.Root(),
-				blockNumber:  block2.Number(),
-				blockHash:    block2.Hash(),
+			statediff.Args{
+				OldStateRoot: block1.Root(),
+				NewStateRoot: block2.Root(),
+				BlockNumber:  block2.Number(),
+				BlockHash:    block2.Hash(),
 			},
 			&statediff.StateDiff{
 				BlockNumber: block2.Number(),
 				BlockHash:   block2.Hash(),
-				CreatedNodes: []statediff.StateNode{
+				Nodes: []statediff.StateNode{
+					{
+						Path:         []byte{'\x00'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.BankLeafKey,
+						NodeValue:    bankAccountAtBlock2LeafNode,
+						StorageDiffs: emptyStorage,
+					},
+					{
+						Path:         []byte{'\x05'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      minerLeafKey,
+						NodeValue:    minerAccountAtBlock2LeafNode,
+						StorageDiffs: emptyStorage,
+					},
+					{
+						Path:         []byte{'\x0e'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.Account1LeafKey,
+						NodeValue:    account1AtBlock2LeafNode,
+						StorageDiffs: emptyStorage,
+					},
 					{
 						Path:      []byte{'\x06'},
 						NodeType:  statediff.Leaf,
@@ -416,48 +414,22 @@ func TestBuilder(t *testing.T) {
 						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: []statediff.StateNode{
-					{
-						Path:         []byte{'\x00'},
-						NodeType:     statediff.Leaf,
-						LeafKey:      testhelpers.BankLeafKey,
-						NodeValue:    bankAccountAtBlock2LeafNode,
-						StorageDiffs: emptyStorage,
-					},
-					{
-						Path:         []byte{'\x05'},
-						NodeType:     statediff.Leaf,
-						LeafKey:      minerLeafKey,
-						NodeValue:    minerAccountAtBlock2LeafNode,
-						StorageDiffs: emptyStorage,
-					},
-					{
-						Path:         []byte{'\x0e'},
-						NodeType:     statediff.Leaf,
-						LeafKey:      testhelpers.Account1LeafKey,
-						NodeValue:    account1AtBlock2LeafNode,
-						StorageDiffs: emptyStorage,
-					},
-				},
 			},
 		},
 		{
 			"testBlock3",
 			//the contract's storage is changed
 			//and the block is mined by account 2
-			arguments{
-				oldStateRoot: block2.Root(),
-				newStateRoot: block3.Root(),
-				blockNumber:  block3.Number(),
-				blockHash:    block3.Hash(),
-			},
-			&statediff.StateDiff{
+			statediff.Args{
+				OldStateRoot: block2.Root(),
+				NewStateRoot: block3.Root(),
 				BlockNumber:  block3.Number(),
 				BlockHash:    block3.Hash(),
-				CreatedNodes: []statediff.StateNode{},
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: []statediff.StateNode{
+			},
+			&statediff.StateDiff{
+				BlockNumber: block3.Number(),
+				BlockHash:   block3.Hash(),
+				Nodes: []statediff.StateNode{
 					{
 						Path:         []byte{'\x00'},
 						NodeType:     statediff.Leaf,
@@ -498,8 +470,7 @@ func TestBuilder(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		arguments := test.startingArguments
-		diff, err := builder.BuildStateDiff(arguments.oldStateRoot, arguments.newStateRoot, arguments.blockNumber, arguments.blockHash)
+		diff, err := builder.BuildStateDiff(test.startingArguments, params)
 		if err != nil {
 			t.Error(err)
 		}
@@ -521,52 +492,51 @@ func TestBuilder(t *testing.T) {
 }
 
 func TestBuilderWithIntermediateNodes(t *testing.T) {
-	blockHashes, blockMap, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
+	BlockHashes, blockMap, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
 	contractLeafKey = testhelpers.AddressToLeafKey(testhelpers.ContractAddr)
 	defer chain.Stop()
-	block0 = blockMap[blockHashes[3]]
-	block1 = blockMap[blockHashes[2]]
-	block2 = blockMap[blockHashes[1]]
-	block3 = blockMap[blockHashes[0]]
-	config := statediff.Config{
-		IntermediateNodes: true,
+	block0 = blockMap[BlockHashes[3]]
+	block1 = blockMap[BlockHashes[2]]
+	block2 = blockMap[BlockHashes[1]]
+	block3 = blockMap[BlockHashes[0]]
+	params := statediff.Params{
+		IntermediateStateNodes:   true,
+		IntermediateStorageNodes: true,
 	}
-	builder = statediff.NewBuilder(chain, config)
+	builder = statediff.NewBuilder(chain.StateCache())
 
 	var tests = []struct {
 		name              string
-		startingArguments arguments
+		startingArguments statediff.Args
 		expected          *statediff.StateDiff
 	}{
 		{
 			"testEmptyDiff",
-			arguments{
-				oldStateRoot: block0.Root(),
-				newStateRoot: block0.Root(),
-				blockNumber:  block0.Number(),
-				blockHash:    block0.Hash(),
-			},
-			&statediff.StateDiff{
+			statediff.Args{
+				OldStateRoot: block0.Root(),
+				NewStateRoot: block0.Root(),
 				BlockNumber:  block0.Number(),
 				BlockHash:    block0.Hash(),
-				CreatedNodes: emptyAccounts,
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: emptyAccounts,
+			},
+			&statediff.StateDiff{
+				BlockNumber: block0.Number(),
+				BlockHash:   block0.Hash(),
+				Nodes:       emptyDiffs,
 			},
 		},
 		{
 			"testBlock0",
 			//10000 transferred from testBankAddress to account1Addr
-			arguments{
-				oldStateRoot: testhelpers.NullHash,
-				newStateRoot: block0.Root(),
-				blockNumber:  block0.Number(),
-				blockHash:    block0.Hash(),
+			statediff.Args{
+				OldStateRoot: testhelpers.NullHash,
+				NewStateRoot: block0.Root(),
+				BlockNumber:  block0.Number(),
+				BlockHash:    block0.Hash(),
 			},
 			&statediff.StateDiff{
 				BlockNumber: block0.Number(),
 				BlockHash:   block0.Hash(),
-				CreatedNodes: []statediff.StateNode{
+				Nodes: []statediff.StateNode{
 					{
 						Path:         []byte{},
 						NodeType:     statediff.Leaf,
@@ -575,23 +545,27 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: emptyAccounts,
 			},
 		},
 		{
 			"testBlock1",
 			//10000 transferred from testBankAddress to account1Addr
-			arguments{
-				oldStateRoot: block0.Root(),
-				newStateRoot: block1.Root(),
-				blockNumber:  block1.Number(),
-				blockHash:    block1.Hash(),
+			statediff.Args{
+				OldStateRoot: block0.Root(),
+				NewStateRoot: block1.Root(),
+				BlockNumber:  block1.Number(),
+				BlockHash:    block1.Hash(),
 			},
 			&statediff.StateDiff{
 				BlockNumber: block1.Number(),
 				BlockHash:   block1.Hash(),
-				CreatedNodes: []statediff.StateNode{
+				Nodes: []statediff.StateNode{
+					{
+						Path:         []byte{},
+						NodeType:     statediff.Branch,
+						NodeValue:    block1BranchNode,
+						StorageDiffs: emptyStorage,
+					},
 					{
 						Path:         []byte{'\x00'},
 						NodeType:     statediff.Leaf,
@@ -614,15 +588,6 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: []statediff.StateNode{
-					{
-						Path:         []byte{},
-						NodeType:     statediff.Branch,
-						NodeValue:    block1BranchNode,
-						StorageDiffs: emptyStorage,
-					},
-				},
 			},
 		},
 		{
@@ -630,40 +595,16 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 			// 1000 transferred from testBankAddress to account1Addr
 			// 1000 transferred from account1Addr to account2Addr
 			// account1addr creates a new contract
-			arguments{
-				oldStateRoot: block1.Root(),
-				newStateRoot: block2.Root(),
-				blockNumber:  block2.Number(),
-				blockHash:    block2.Hash(),
+			statediff.Args{
+				OldStateRoot: block1.Root(),
+				NewStateRoot: block2.Root(),
+				BlockNumber:  block2.Number(),
+				BlockHash:    block2.Hash(),
 			},
 			&statediff.StateDiff{
 				BlockNumber: block2.Number(),
 				BlockHash:   block2.Hash(),
-				CreatedNodes: []statediff.StateNode{
-					{
-						Path:      []byte{'\x06'},
-						NodeType:  statediff.Leaf,
-						LeafKey:   contractLeafKey,
-						NodeValue: contractAccountAtBlock2LeafNode,
-						StorageDiffs: []statediff.StorageNode{
-							{
-								Path:      []byte{},
-								NodeType:  statediff.Leaf,
-								LeafKey:   originalStorageKey,
-								NodeValue: originalStorageLeafNode,
-							},
-						},
-					},
-					{
-						Path:         []byte{'\x0c'},
-						NodeType:     statediff.Leaf,
-						LeafKey:      testhelpers.Account2LeafKey,
-						NodeValue:    account2AtBlock2LeafNode,
-						StorageDiffs: emptyStorage,
-					},
-				},
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: []statediff.StateNode{
+				Nodes: []statediff.StateNode{
 					{
 						Path:         []byte{},
 						NodeType:     statediff.Branch,
@@ -691,6 +632,27 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 						NodeValue:    account1AtBlock2LeafNode,
 						StorageDiffs: emptyStorage,
 					},
+					{
+						Path:      []byte{'\x06'},
+						NodeType:  statediff.Leaf,
+						LeafKey:   contractLeafKey,
+						NodeValue: contractAccountAtBlock2LeafNode,
+						StorageDiffs: []statediff.StorageNode{
+							{
+								Path:      []byte{},
+								NodeType:  statediff.Leaf,
+								LeafKey:   originalStorageKey,
+								NodeValue: originalStorageLeafNode,
+							},
+						},
+					},
+					{
+						Path:         []byte{'\x0c'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      testhelpers.Account2LeafKey,
+						NodeValue:    account2AtBlock2LeafNode,
+						StorageDiffs: emptyStorage,
+					},
 				},
 			},
 		},
@@ -698,18 +660,16 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 			"testBlock3",
 			//the contract's storage is changed
 			//and the block is mined by account 2
-			arguments{
-				oldStateRoot: block2.Root(),
-				newStateRoot: block3.Root(),
-				blockNumber:  block3.Number(),
-				blockHash:    block3.Hash(),
-			},
-			&statediff.StateDiff{
+			statediff.Args{
+				OldStateRoot: block2.Root(),
+				NewStateRoot: block3.Root(),
 				BlockNumber:  block3.Number(),
 				BlockHash:    block3.Hash(),
-				CreatedNodes: []statediff.StateNode{},
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: []statediff.StateNode{
+			},
+			&statediff.StateDiff{
+				BlockNumber: block3.Number(),
+				BlockHash:   block3.Hash(),
+				Nodes: []statediff.StateNode{
 					{
 						Path:         []byte{},
 						NodeType:     statediff.Branch,
@@ -761,8 +721,7 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		arguments := test.startingArguments
-		diff, err := builder.BuildStateDiff(arguments.oldStateRoot, arguments.newStateRoot, arguments.blockNumber, arguments.blockHash)
+		diff, err := builder.BuildStateDiff(test.startingArguments, params)
 		if err != nil {
 			t.Error(err)
 		}
@@ -784,70 +743,65 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 }
 
 func TestBuilderWithWatchedAddressList(t *testing.T) {
-	blockHashes, blockMap, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
+	BlockHashes, blockMap, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
 	contractLeafKey = testhelpers.AddressToLeafKey(testhelpers.ContractAddr)
 	defer chain.Stop()
-	block0 = blockMap[blockHashes[3]]
-	block1 = blockMap[blockHashes[2]]
-	block2 = blockMap[blockHashes[1]]
-	block3 = blockMap[blockHashes[0]]
-	config := statediff.Config{
-		IntermediateNodes: false,
-		WatchedAddresses:  []string{testhelpers.Account1Addr.Hex(), testhelpers.ContractAddr.Hex()},
+	block0 = blockMap[BlockHashes[3]]
+	block1 = blockMap[BlockHashes[2]]
+	block2 = blockMap[BlockHashes[1]]
+	block3 = blockMap[BlockHashes[0]]
+	params := statediff.Params{
+		WatchedAddresses: []string{testhelpers.Account1Addr.Hex(), testhelpers.ContractAddr.Hex()},
 	}
-	builder = statediff.NewBuilder(chain, config)
+	builder = statediff.NewBuilder(chain.StateCache())
 
 	var tests = []struct {
 		name              string
-		startingArguments arguments
+		startingArguments statediff.Args
 		expected          *statediff.StateDiff
 	}{
 		{
 			"testEmptyDiff",
-			arguments{
-				oldStateRoot: block0.Root(),
-				newStateRoot: block0.Root(),
-				blockNumber:  block0.Number(),
-				blockHash:    block0.Hash(),
-			},
-			&statediff.StateDiff{
+			statediff.Args{
+				OldStateRoot: block0.Root(),
+				NewStateRoot: block0.Root(),
 				BlockNumber:  block0.Number(),
 				BlockHash:    block0.Hash(),
-				CreatedNodes: emptyAccounts,
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: emptyAccounts,
+			},
+			&statediff.StateDiff{
+				BlockNumber: block0.Number(),
+				BlockHash:   block0.Hash(),
+				Nodes:       emptyDiffs,
 			},
 		},
 		{
 			"testBlock0",
 			//10000 transferred from testBankAddress to account1Addr
-			arguments{
-				oldStateRoot: testhelpers.NullHash,
-				newStateRoot: block0.Root(),
-				blockNumber:  block0.Number(),
-				blockHash:    block0.Hash(),
-			},
-			&statediff.StateDiff{
+			statediff.Args{
+				OldStateRoot: testhelpers.NullHash,
+				NewStateRoot: block0.Root(),
 				BlockNumber:  block0.Number(),
 				BlockHash:    block0.Hash(),
-				CreatedNodes: emptyAccounts,
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: emptyAccounts,
+			},
+			&statediff.StateDiff{
+				BlockNumber: block0.Number(),
+				BlockHash:   block0.Hash(),
+				Nodes:       emptyDiffs,
 			},
 		},
 		{
 			"testBlock1",
 			//10000 transferred from testBankAddress to account1Addr
-			arguments{
-				oldStateRoot: block0.Root(),
-				newStateRoot: block1.Root(),
-				blockNumber:  block1.Number(),
-				blockHash:    block1.Hash(),
+			statediff.Args{
+				OldStateRoot: block0.Root(),
+				NewStateRoot: block1.Root(),
+				BlockNumber:  block1.Number(),
+				BlockHash:    block1.Hash(),
 			},
 			&statediff.StateDiff{
 				BlockNumber: block1.Number(),
 				BlockHash:   block1.Hash(),
-				CreatedNodes: []statediff.StateNode{
+				Nodes: []statediff.StateNode{
 					{
 						Path:         []byte{'\x0e'},
 						NodeType:     statediff.Leaf,
@@ -856,24 +810,22 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 						StorageDiffs: emptyStorage,
 					},
 				},
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: []statediff.StateNode{},
 			},
 		},
 		{
 			"testBlock2",
 			//1000 transferred from testBankAddress to account1Addr
 			//1000 transferred from account1Addr to account2Addr
-			arguments{
-				oldStateRoot: block1.Root(),
-				newStateRoot: block2.Root(),
-				blockNumber:  block2.Number(),
-				blockHash:    block2.Hash(),
+			statediff.Args{
+				OldStateRoot: block1.Root(),
+				NewStateRoot: block2.Root(),
+				BlockNumber:  block2.Number(),
+				BlockHash:    block2.Hash(),
 			},
 			&statediff.StateDiff{
 				BlockNumber: block2.Number(),
 				BlockHash:   block2.Hash(),
-				CreatedNodes: []statediff.StateNode{
+				Nodes: []statediff.StateNode{
 					{
 						Path:      []byte{'\x06'},
 						NodeType:  statediff.Leaf,
@@ -888,9 +840,6 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 							},
 						},
 					},
-				},
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: []statediff.StateNode{
 					{
 						Path:         []byte{'\x0e'},
 						NodeType:     statediff.Leaf,
@@ -905,18 +854,16 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 			"testBlock3",
 			//the contract's storage is changed
 			//and the block is mined by account 2
-			arguments{
-				oldStateRoot: block2.Root(),
-				newStateRoot: block3.Root(),
-				blockNumber:  block3.Number(),
-				blockHash:    block3.Hash(),
-			},
-			&statediff.StateDiff{
+			statediff.Args{
+				OldStateRoot: block2.Root(),
+				NewStateRoot: block3.Root(),
 				BlockNumber:  block3.Number(),
 				BlockHash:    block3.Hash(),
-				CreatedNodes: []statediff.StateNode{},
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: []statediff.StateNode{
+			},
+			&statediff.StateDiff{
+				BlockNumber: block3.Number(),
+				BlockHash:   block3.Hash(),
+				Nodes: []statediff.StateNode{
 					{
 						Path:      []byte{'\x06'},
 						NodeType:  statediff.Leaf,
@@ -943,8 +890,7 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		arguments := test.startingArguments
-		diff, err := builder.BuildStateDiff(arguments.oldStateRoot, arguments.newStateRoot, arguments.blockNumber, arguments.blockHash)
+		diff, err := builder.BuildStateDiff(test.startingArguments, params)
 		if err != nil {
 			t.Error(err)
 		}

@@ -81,10 +81,9 @@ func (sd *Payload) Encode() ([]byte, error) {
 
 // StateDiff is the final output structure from the builder
 type StateDiff struct {
-	BlockNumber       *big.Int    `json:"blockNumber"     gencodec:"required"`
-	BlockHash         common.Hash `json:"blockHash"       gencodec:"required"`
-	LeafNodes         []StateNode `json:"leafNodes" gencodec:"required"`
-	IntermediateNodes []StateNode `json:"intermediateNodes" gencodec:"required"`
+	BlockNumber *big.Int    `json:"blockNumber"     gencodec:"required"`
+	BlockHash   common.Hash `json:"blockHash"       gencodec:"required"`
+	Nodes       []StateNode `json:"Nodes" gencodec:"required"`
 
 	encoded []byte
 	err     error

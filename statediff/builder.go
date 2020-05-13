@@ -98,10 +98,9 @@ func (sdb *builder) buildStateDiffWithIntermediateStateNodes(args Args, intermed
 	}
 
 	return StateDiff{
-		BlockNumber:       args.BlockNumber,
-		BlockHash:         args.BlockHash,
-		LeafNodes:         append(append(updatedAccounts, createdAccounts...), deletedAccounts...),
-		IntermediateNodes: append(createdOrUpdatedIntermediateNodes, deletedIntermediateNodes...),
+		BlockNumber: args.BlockNumber,
+		BlockHash:   args.BlockHash,
+		Nodes:       append(append(append(append(updatedAccounts, createdAccounts...), deletedAccounts...), createdOrUpdatedIntermediateNodes...), deletedIntermediateNodes...),
 	}, nil
 }
 
@@ -148,7 +147,7 @@ func (sdb *builder) buildStateDiffWithoutIntermediateStateNodes(args Args, param
 	return StateDiff{
 		BlockNumber: args.BlockNumber,
 		BlockHash:   args.BlockHash,
-		LeafNodes:   append(append(updatedAccounts, createdAccounts...), deletedAccounts...),
+		Nodes:       append(append(updatedAccounts, createdAccounts...), deletedAccounts...),
 	}, nil
 }
 

@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -35,15 +37,15 @@ import (
 // MockStateDiffService is a mock state diff service
 type MockStateDiffService struct {
 	sync.Mutex
-	Builder         statediff.Builder
-	BlockChain      *BlockChain
-	ReturnProtocol  []p2p.Protocol
-	ReturnAPIs      []rpc.API
-	BlockChan       chan *types.Block
-	ParentBlockChan chan *types.Block
-	QuitChan        chan bool
-	Subscriptions   map[rpc.ID]statediff.Subscription
-	streamBlock     bool
+	Builder           statediff.Builder
+	BlockChain        *BlockChain
+	ReturnProtocol    []p2p.Protocol
+	ReturnAPIs        []rpc.API
+	BlockChan         chan *types.Block
+	ParentBlockChan   chan *types.Block
+	QuitChan          chan bool
+	Subscriptions     map[common.Hash]map[rpc.ID]statediff.Subscription
+	SubscriptionTypes map[common.Hash]statediff.Params
 }
 
 // Protocols mock method
@@ -78,12 +80,7 @@ func (sds *MockStateDiffService) Loop(chan core.ChainEvent) {
 					"current block number", currentBlock.Number())
 				continue
 			}
-			payload, err := sds.processStateDiff(currentBlock, parentBlock)
-			if err != nil {
-				log.Error("Error building statediff", "block number", currentBlock.Number(), "error", err)
-				continue
-			}
-			sds.send(*payload)
+			sds.streamStateDiff(currentBlock, parentBlock.Root())
 		case <-sds.QuitChan:
 			log.Debug("Quitting the statediff block channel")
 			sds.close()
@@ -92,13 +89,46 @@ func (sds *MockStateDiffService) Loop(chan core.ChainEvent) {
 	}
 }
 
-// processStateDiff method builds the state diff payload from the current and parent block and streams it to listening subscriptions
-func (sds *MockStateDiffService) processStateDiff(currentBlock, parentBlock *types.Block) (*statediff.Payload, error) {
-	stateDiff, err := sds.Builder.BuildStateDiff(parentBlock.Root(), currentBlock.Root(), currentBlock.Number(), currentBlock.Hash())
+// streamStateDiff method builds the state diff payload for each subscription according to their subscription type and sends them the result
+func (sds *MockStateDiffService) streamStateDiff(currentBlock *types.Block, parentRoot common.Hash) {
+	sds.Lock()
+	for ty, subs := range sds.Subscriptions {
+		params, ok := sds.SubscriptionTypes[ty]
+		if !ok {
+			log.Error(fmt.Sprintf("subscriptions type %s do not have a parameter set associated with them", ty.Hex()))
+			sds.closeType(ty)
+			continue
+		}
+		// create payload for this subscription type
+		payload, err := sds.processStateDiff(currentBlock, parentRoot, params)
+		if err != nil {
+			log.Error(fmt.Sprintf("statediff processing error for subscriptions with parameters: %+v", params))
+			sds.closeType(ty)
+			continue
+		}
+		for id, sub := range subs {
+			select {
+			case sub.PayloadChan <- *payload:
+				log.Debug(fmt.Sprintf("sending statediff payload to subscription %s", id))
+			default:
+				log.Info(fmt.Sprintf("unable to send statediff payload to subscription %s; channel has no receiver", id))
+			}
+		}
+	}
+	sds.Unlock()
+}
+
+// processStateDiff method builds the state diff payload from the current block, parent state root, and provided params
+func (sds *MockStateDiffService) processStateDiff(currentBlock *types.Block, parentRoot common.Hash, params statediff.Params) (*statediff.Payload, error) {
+	stateDiff, err := sds.Builder.BuildStateDiff(statediff.Args{
+		NewStateRoot: currentBlock.Root(),
+		OldStateRoot: parentRoot,
+		BlockHash:    currentBlock.Hash(),
+		BlockNumber:  currentBlock.Number(),
+	}, params)
 	if err != nil {
 		return nil, err
 	}
-
 	stateDiffRlp, err := rlp.EncodeToBytes(stateDiff)
 	if err != nil {
 		return nil, err
@@ -106,13 +136,17 @@ func (sds *MockStateDiffService) processStateDiff(currentBlock, parentBlock *typ
 	payload := statediff.Payload{
 		StateDiffRlp: stateDiffRlp,
 	}
-	if sds.streamBlock {
-		rlpBuff := new(bytes.Buffer)
-		if err = currentBlock.EncodeRLP(rlpBuff); err != nil {
+	if params.IncludeBlock {
+		blockBuff := new(bytes.Buffer)
+		if err = currentBlock.EncodeRLP(blockBuff); err != nil {
 			return nil, err
 		}
-		payload.BlockRlp = rlpBuff.Bytes()
+		payload.BlockRlp = blockBuff.Bytes()
+	}
+	if params.IncludeTD {
 		payload.TotalDifficulty = sds.BlockChain.GetTdByHash(currentBlock.Hash())
+	}
+	if params.IncludeReceipts {
 		receiptBuff := new(bytes.Buffer)
 		receipts := sds.BlockChain.GetReceiptsByHash(currentBlock.Hash())
 		if err = rlp.Encode(receiptBuff, receipts); err != nil {
@@ -123,53 +157,68 @@ func (sds *MockStateDiffService) processStateDiff(currentBlock, parentBlock *typ
 	return &payload, nil
 }
 
-// Subscribe mock method
-func (sds *MockStateDiffService) Subscribe(id rpc.ID, sub chan<- statediff.Payload, quitChan chan<- bool) {
-	log.Info("Subscribing to the mock statediff service")
+// Subscribe is used by the API to subscribe to the service loop
+func (sds *MockStateDiffService) Subscribe(id rpc.ID, sub chan<- statediff.Payload, quitChan chan<- bool, params statediff.Params) {
+	// Subscription type is defined as the hash of the rlp-serialized subscription params
+	by, err := rlp.EncodeToBytes(params)
+	if err != nil {
+		return
+	}
+	subscriptionType := crypto.Keccak256Hash(by)
+	// Add subscriber
 	sds.Lock()
-	sds.Subscriptions[id] = statediff.Subscription{
+	if sds.Subscriptions[subscriptionType] == nil {
+		sds.Subscriptions[subscriptionType] = make(map[rpc.ID]statediff.Subscription)
+	}
+	sds.Subscriptions[subscriptionType][id] = statediff.Subscription{
 		PayloadChan: sub,
 		QuitChan:    quitChan,
 	}
+	sds.SubscriptionTypes[subscriptionType] = params
 	sds.Unlock()
 }
 
-// Unsubscribe mock method
+// Unsubscribe is used to unsubscribe from the service loop
 func (sds *MockStateDiffService) Unsubscribe(id rpc.ID) error {
-	log.Info("Unsubscribing from the mock statediff service")
 	sds.Lock()
-	_, ok := sds.Subscriptions[id]
-	if !ok {
-		return fmt.Errorf("cannot unsubscribe; subscription for id %s does not exist", id)
+	for ty := range sds.Subscriptions {
+		delete(sds.Subscriptions[ty], id)
+		if len(sds.Subscriptions[ty]) == 0 {
+			// If we removed the last subscription of this type, remove the subscription type outright
+			delete(sds.Subscriptions, ty)
+			delete(sds.SubscriptionTypes, ty)
+		}
 	}
-	delete(sds.Subscriptions, id)
 	sds.Unlock()
 	return nil
 }
 
-func (sds *MockStateDiffService) send(payload statediff.Payload) {
-	sds.Lock()
-	for id, sub := range sds.Subscriptions {
-		select {
-		case sub.PayloadChan <- payload:
-			log.Info("sending state diff payload to subscription %s", id)
-		default:
-			log.Info("unable to send payload to subscription %s; channel has no receiver", id)
-		}
+// StateDiffAt mock method
+func (sds *MockStateDiffService) StateDiffAt(blockNumber uint64, params statediff.Params) (*statediff.Payload, error) {
+	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
+	log.Info(fmt.Sprintf("sending state diff at %d", blockNumber))
+	if blockNumber == 0 {
+		return sds.processStateDiff(currentBlock, common.Hash{}, params)
 	}
-	sds.Unlock()
+	parentBlock := sds.BlockChain.GetBlockByHash(currentBlock.ParentHash())
+	return sds.processStateDiff(currentBlock, parentBlock.Root(), params)
 }
 
+// close is used to close all listening subscriptions
 func (sds *MockStateDiffService) close() {
 	sds.Lock()
-	for id, sub := range sds.Subscriptions {
-		select {
-		case sub.QuitChan <- true:
-			delete(sds.Subscriptions, id)
-			log.Info("closing subscription %s", id)
-		default:
-			log.Info("unable to close subscription %s; channel has no receiver", id)
+	for ty, subs := range sds.Subscriptions {
+		for id, sub := range subs {
+			select {
+			case sub.QuitChan <- true:
+				log.Info(fmt.Sprintf("closing subscription %s", id))
+			default:
+				log.Info(fmt.Sprintf("unable to close subscription %s; channel has no receiver", id))
+			}
+			delete(sds.Subscriptions[ty], id)
 		}
+		delete(sds.Subscriptions, ty)
+		delete(sds.SubscriptionTypes, ty)
 	}
 	sds.Unlock()
 }
@@ -193,10 +242,22 @@ func (sds *MockStateDiffService) Stop() error {
 	return nil
 }
 
-// StateDiffAt mock method
-func (sds *MockStateDiffService) StateDiffAt(blockNumber uint64) (*statediff.Payload, error) {
-	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
-	parentBlock := sds.BlockChain.GetBlockByHash(currentBlock.ParentHash())
-	log.Info(fmt.Sprintf("sending state diff at %d", blockNumber))
-	return sds.processStateDiff(currentBlock, parentBlock)
+// closeType is used to close all subscriptions of given type
+// closeType needs to be called with subscription access locked
+func (sds *MockStateDiffService) closeType(subType common.Hash) {
+	subs := sds.Subscriptions[subType]
+	for id, sub := range subs {
+		sendNonBlockingQuit(id, sub)
+	}
+	delete(sds.Subscriptions, subType)
+	delete(sds.SubscriptionTypes, subType)
+}
+
+func sendNonBlockingQuit(id rpc.ID, sub statediff.Subscription) {
+	select {
+	case sub.QuitChan <- true:
+		log.Info(fmt.Sprintf("closing subscription %s", id))
+	default:
+		log.Info("unable to close subscription %s; channel has no receiver", id)
+	}
 }

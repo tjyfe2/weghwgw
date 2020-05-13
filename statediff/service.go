@@ -140,6 +140,8 @@ func (sds *Service) Loop(chainEventCh chan core.ChainEvent) {
 			sds.streamStateDiff(currentBlock, parentBlock.Root())
 		case err := <-errCh:
 			log.Warn("Error from chain event subscription", "error", err)
+			sds.close()
+			return
 		case <-sds.QuitChan:
 			log.Info("Quitting the statediffing process")
 			sds.close()
