@@ -25,10 +25,10 @@ import (
 	"strings"
 )
 
-func sortKeys(data AccountsMap) []string {
+func sortKeys(data AccountMap) []string {
 	keys := make([]string, 0, len(data))
 	for key := range data {
-		keys = append(keys, key.Hex())
+		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 
@@ -79,7 +79,7 @@ func CheckKeyType(elements []interface{}) (NodeType, error) {
 		return Branch, nil
 	}
 	if len(elements) < 2 {
-		return Unknown, nil
+		return Unknown, fmt.Errorf("node cannot be less than two elements in length")
 	}
 	switch elements[0].([]byte)[0] / 16 {
 	case '\x00':

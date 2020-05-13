@@ -34,6 +34,22 @@ type Subscription struct {
 	QuitChan    chan<- bool
 }
 
+// Params is used to carry in parameters from subscribing/requesting clients configuration
+type Params struct {
+	IntermediateStateNodes   bool
+	IntermediateStorageNodes bool
+	IncludeBlock             bool
+	IncludeReceipts          bool
+	IncludeTD                bool
+	WatchedAddresses         []string
+}
+
+// Args bundles the arguments for the state diff builder
+type Args struct {
+	OldStateRoot, NewStateRoot, BlockHash common.Hash
+	BlockNumber                           *big.Int
+}
+
 // Payload packages the data to send to statediff subscriptions
 type Payload struct {
 	BlockRlp        []byte   `json:"blockRlp"`
@@ -65,11 +81,10 @@ func (sd *Payload) Encode() ([]byte, error) {
 
 // StateDiff is the final output structure from the builder
 type StateDiff struct {
-	BlockNumber  *big.Int    `json:"blockNumber"     gencodec:"required"`
-	BlockHash    common.Hash `json:"blockHash"       gencodec:"required"`
-	CreatedNodes []StateNode `json:"createdAccounts" gencodec:"required"`
-	DeletedNodes []StateNode `json:"deletedAccounts" gencodec:"required"`
-	UpdatedNodes []StateNode `json:"updatedAccounts" gencodec:"required"`
+	BlockNumber       *big.Int    `json:"blockNumber"     gencodec:"required"`
+	BlockHash         common.Hash `json:"blockHash"       gencodec:"required"`
+	LeafNodes         []StateNode `json:"leafNodes" gencodec:"required"`
+	IntermediateNodes []StateNode `json:"intermediateNodes" gencodec:"required"`
 
 	encoded []byte
 	err     error
@@ -92,10 +107,10 @@ type StorageNode struct {
 	LeafKey   []byte   `json:"leafKey"`
 }
 
-// AccountsMap is a mapping of keccak256(address) => accountWrapper
-type AccountsMap map[common.Hash]accountWrapper
+// AccountMap is a mapping of hex encoded path => account wrapper
+type AccountMap map[string]accountWrapper
 
-// AccountWrapper is used to temporary associate the unpacked account with its raw values
+// accountWrapper is used to temporary associate the unpacked node with its raw values
 type accountWrapper struct {
 	Account   *state.Account
 	NodeType  NodeType
