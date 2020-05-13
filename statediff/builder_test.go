@@ -751,7 +751,7 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 	block2 = blockMap[BlockHashes[1]]
 	block3 = blockMap[BlockHashes[0]]
 	params := statediff.Params{
-		WatchedAddresses: []string{testhelpers.Account1Addr.Hex(), testhelpers.ContractAddr.Hex()},
+		WatchedAddresses: []common.Address{testhelpers.Account1Addr, testhelpers.ContractAddr},
 	}
 	builder = statediff.NewBuilder(chain.StateCache())
 
@@ -910,6 +910,8 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 		}
 	}
 }
+
+// Write a test that tests when accounts are deleted, or moved to a new path
 
 /*
 contract test {

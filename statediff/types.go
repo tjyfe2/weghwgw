@@ -41,7 +41,8 @@ type Params struct {
 	IncludeBlock             bool
 	IncludeReceipts          bool
 	IncludeTD                bool
-	WatchedAddresses         []string
+	WatchedAddresses         []common.Address
+	WatchedStorageSlots      []common.Hash
 }
 
 // Args bundles the arguments for the state diff builder
