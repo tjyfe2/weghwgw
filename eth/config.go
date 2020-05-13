@@ -61,8 +61,6 @@ var DefaultConfig = Config{
 		Blocks:     20,
 		Percentile: 60,
 	},
-
-	StateDiff: false,
 }
 
 func init() {
@@ -166,6 +164,4 @@ type Config struct {
 
 	// MuirGlacier block override (TODO: remove after the fork)
 	OverrideMuirGlacier *big.Int `toml:",omitempty"`
-
-	StateDiff bool
 }

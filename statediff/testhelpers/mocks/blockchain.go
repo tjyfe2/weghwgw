@@ -38,9 +38,6 @@ type BlockChain struct {
 	TDByHash               map[common.Hash]*big.Int
 }
 
-// AddToStateDiffProcessedCollection mock method
-func (blockChain *BlockChain) AddToStateDiffProcessedCollection(hash common.Hash) {}
-
 // SetBlocksForHashes mock method
 func (blockChain *BlockChain) SetBlocksForHashes(blocks map[common.Hash]*types.Block) {
 	if blockChain.blocksToReturnByHash == nil {

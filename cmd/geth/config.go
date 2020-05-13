@@ -156,7 +156,6 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	utils.RegisterEthService(stack, &cfg.Eth)
 
 	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
-		cfg.Eth.StateDiff = true
 		utils.RegisterStateDiffService(stack)
 	}
 
