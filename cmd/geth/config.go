@@ -157,7 +157,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 
 	if ctx.GlobalBool(utils.StateDiffFlag.Name) {
 		cfg.Eth.StateDiff = true
-		utils.RegisterStateDiffService(stack, ctx)
+		utils.RegisterStateDiffService(stack)
 	}
 
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode

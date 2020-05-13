@@ -761,18 +761,6 @@ var (
 		Name:  "statediff",
 		Usage: "Enables the processing of state diffs between each block",
 	}
-	StateDiffIntermediateNodes = cli.BoolFlag{
-		Name:  "statediff.intermediatenodes",
-		Usage: "Set to include intermediate (branch and extension) nodes; default (false) processes leaf nodes only",
-	}
-	StateDiffStreamBlock = cli.BoolFlag{
-		Name:  "statediff.streamblock",
-		Usage: "Set to true to stream the block data alongside state diff data in the same subscription payload",
-	}
-	StateDiffWatchedAddresses = cli.StringSliceFlag{
-		Name:  "statediff.watchedaddresses",
-		Usage: "If provided, state diffing process is restricted to these addresses",
-	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1645,17 +1633,12 @@ func RegisterGraphQLService(stack *node.Node, endpoint string, cors, vhosts []st
 }
 
 // RegisterStateDiffService configures and registers a service to stream state diff data over RPC
-func RegisterStateDiffService(stack *node.Node, ctx *cli.Context) {
-	config := statediff.Config{
-		IntermediateNodes: ctx.GlobalBool(StateDiffIntermediateNodes.Name),
-		StreamBlock:       ctx.GlobalBool(StateDiffStreamBlock.Name),
-		WatchedAddresses:  ctx.GlobalStringSlice(StateDiffWatchedAddresses.Name),
-	}
+func RegisterStateDiffService(stack *node.Node) {
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		var ethServ *eth.Ethereum
 		ctx.Service(&ethServ)
 		blockChain := ethServ.BlockChain()
-		return statediff.NewStateDiffService(blockChain, config)
+		return statediff.NewStateDiffService(blockChain)
 	}); err != nil {
 		Fatalf("Failed to register State Diff Service", err)
 	}
