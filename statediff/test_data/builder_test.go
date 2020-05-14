@@ -414,13 +414,6 @@ var (
 	})
 )
 
-type arguments struct {
-	oldStateRoot common.Hash
-	newStateRoot common.Hash
-	blockNumber  *big.Int
-	blockHash    common.Hash
-}
-
 func init() {
 	db = rawdb.NewMemoryDatabase()
 	genesisBlock = core.DefaultGenesisBlock().MustCommit(db)
@@ -476,39 +469,29 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	config := statediff.Config{
-		IntermediateNodes: true,
+	params := statediff.Params{
+		IntermediateStateNodes: true,
 	}
-	builder = statediff.NewBuilder(chain, config)
+	builder = statediff.NewBuilder(chain.StateCache())
 
 	var tests = []struct {
 		name              string
-		startingArguments arguments
+		startingArguments statediff.Args
 		expected          *statediff.StateDiff
 	}{
 		{
 			"testBlock1",
 			//10000 transferred from testBankAddress to account1Addr
-			arguments{
-				oldStateRoot: block0.Root(),
-				newStateRoot: block1.Root(),
-				blockNumber:  block1.Number(),
-				blockHash:    block1.Hash(),
+			statediff.Args{
+				OldStateRoot: block0.Root(),
+				NewStateRoot: block1.Root(),
+				BlockNumber:  block1.Number(),
+				BlockHash:    block1.Hash(),
 			},
 			&statediff.StateDiff{
 				BlockNumber: block1.Number(),
 				BlockHash:   block1.Hash(),
-				CreatedNodes: []statediff.StateNode{
-					{
-						Path:         []byte{'\x04', '\x0b', '\x0e'},
-						NodeType:     statediff.Leaf,
-						LeafKey:      block1CoinbaseHash.Bytes(),
-						NodeValue:    block1CoinbaseLeafNode,
-						StorageDiffs: emptyStorage,
-					},
-				},
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: []statediff.StateNode{
+				Nodes: []statediff.StateNode{
 					{
 						Path:         []byte{},
 						NodeType:     statediff.Branch,
@@ -527,6 +510,13 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 						StorageDiffs: emptyStorage,
 						NodeValue:    block1x040bBranchNode,
 					},
+					{
+						Path:         []byte{'\x04', '\x0b', '\x0e'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      block1CoinbaseHash.Bytes(),
+						NodeValue:    block1CoinbaseLeafNode,
+						StorageDiffs: emptyStorage,
+					},
 				},
 			},
 		},
@@ -535,36 +525,16 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 			// 1000 transferred from testBankAddress to account1Addr
 			// 1000 transferred from account1Addr to account2Addr
 			// account1addr creates a new contract
-			arguments{
-				oldStateRoot: block1.Root(),
-				newStateRoot: block2.Root(),
-				blockNumber:  block2.Number(),
-				blockHash:    block2.Hash(),
+			statediff.Args{
+				OldStateRoot: block1.Root(),
+				NewStateRoot: block2.Root(),
+				BlockNumber:  block2.Number(),
+				BlockHash:    block2.Hash(),
 			},
 			&statediff.StateDiff{
 				BlockNumber: block2.Number(),
 				BlockHash:   block2.Hash(),
-				CreatedNodes: []statediff.StateNode{
-					// this new leaf at x00 x08 x0d x00 was "created" when a premine account (leaf) was moved from path x00 x08 x0d
-					// this occurred because of the creation of the new coinbase receiving account (leaf) at x00 x08 x0d x04
-					// which necessitates we create a branch at x00 x08 x0d (as shown in the below UpdateAccounts)
-					{
-						Path:         []byte{'\x00', '\x08', '\x0d', '\x00'},
-						NodeType:     statediff.Leaf,
-						StorageDiffs: emptyStorage,
-						LeafKey:      common.HexToHash("08d0f2e24db7943eab4415f99e109698863b0fecca1cf9ffc500f38cefbbe29e").Bytes(),
-						NodeValue:    block2MovedPremineLeafNode,
-					},
-					{
-						Path:         []byte{'\x00', '\x08', '\x0d', '\x04'},
-						NodeType:     statediff.Leaf,
-						StorageDiffs: emptyStorage,
-						LeafKey:      block2CoinbaseHash.Bytes(),
-						NodeValue:    block2CoinbaseLeafNode,
-					},
-				},
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: []statediff.StateNode{
+				Nodes: []statediff.StateNode{
 					{
 						Path:         []byte{},
 						NodeType:     statediff.Branch,
@@ -589,6 +559,23 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 						StorageDiffs: emptyStorage,
 						NodeValue:    block2x00080dBranchNode,
 					},
+					// this new leaf at x00 x08 x0d x00 was "created" when a premine account (leaf) was moved from path x00 x08 x0d
+					// this occurred because of the creation of the new coinbase receiving account (leaf) at x00 x08 x0d x04
+					// which necessitates we create a branch at x00 x08 x0d (as shown in the below UpdateAccounts)
+					{
+						Path:         []byte{'\x00', '\x08', '\x0d', '\x00'},
+						NodeType:     statediff.Leaf,
+						StorageDiffs: emptyStorage,
+						LeafKey:      common.HexToHash("08d0f2e24db7943eab4415f99e109698863b0fecca1cf9ffc500f38cefbbe29e").Bytes(),
+						NodeValue:    block2MovedPremineLeafNode,
+					},
+					{
+						Path:         []byte{'\x00', '\x08', '\x0d', '\x04'},
+						NodeType:     statediff.Leaf,
+						StorageDiffs: emptyStorage,
+						LeafKey:      block2CoinbaseHash.Bytes(),
+						NodeValue:    block2CoinbaseLeafNode,
+					},
 				},
 			},
 		},
@@ -596,40 +583,16 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 			"testBlock3",
 			//the contract's storage is changed
 			//and the block is mined by account 2
-			arguments{
-				oldStateRoot: block2.Root(),
-				newStateRoot: block3.Root(),
-				blockNumber:  block3.Number(),
-				blockHash:    block3.Hash(),
+			statediff.Args{
+				OldStateRoot: block2.Root(),
+				NewStateRoot: block3.Root(),
+				BlockNumber:  block3.Number(),
+				BlockHash:    block3.Hash(),
 			},
 			&statediff.StateDiff{
 				BlockNumber: block3.Number(),
 				BlockHash:   block3.Hash(),
-				CreatedNodes: []statediff.StateNode{
-					{ // How was this account created???
-						Path:         []byte{'\x0c', '\x0e', '\x05', '\x07', '\x03'},
-						NodeType:     statediff.Leaf,
-						StorageDiffs: emptyStorage,
-						LeafKey:      common.HexToHash("ce573ced93917e658d10e2d9009470dad72b63c898d173721194a12f2ae5e190").Bytes(),
-						NodeValue:    block3MovedPremineLeafNode1,
-					},
-					{ // This account (leaf) used to be at 0c 0e 05 07, not sure why it moves...
-						Path:         []byte{'\x0c', '\x0e', '\x05', '\x07', '\x08'},
-						NodeType:     statediff.Leaf,
-						StorageDiffs: emptyStorage,
-						LeafKey:      common.HexToHash("ce5783bc1e69eedf90f402e11f6862da14ed8e50156635a04d6393bbae154012").Bytes(),
-						NodeValue:    block3MovedPremineLeafNode2,
-					},
-					{ // this is the new account created due to the coinbase mining a block, it's creation shouldn't affect 0x 0e 05 07
-						Path:         []byte{'\x06', '\x0e', '\x0f'},
-						NodeType:     statediff.Leaf,
-						StorageDiffs: emptyStorage,
-						LeafKey:      block3CoinbaseHash.Bytes(),
-						NodeValue:    block3CoinbaseLeafNode,
-					},
-				},
-				DeletedNodes: emptyAccounts,
-				UpdatedNodes: []statediff.StateNode{
+				Nodes: []statediff.StateNode{
 					{
 						Path:         []byte{},
 						NodeType:     statediff.Branch,
@@ -672,14 +635,34 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 						StorageDiffs: emptyStorage,
 						NodeValue:    block3x0c0e0507BranchNode,
 					},
+					{ // How was this account created???
+						Path:         []byte{'\x0c', '\x0e', '\x05', '\x07', '\x03'},
+						NodeType:     statediff.Leaf,
+						StorageDiffs: emptyStorage,
+						LeafKey:      common.HexToHash("ce573ced93917e658d10e2d9009470dad72b63c898d173721194a12f2ae5e190").Bytes(),
+						NodeValue:    block3MovedPremineLeafNode1,
+					},
+					{ // This account (leaf) used to be at 0c 0e 05 07, likely moves because of the new account above
+						Path:         []byte{'\x0c', '\x0e', '\x05', '\x07', '\x08'},
+						NodeType:     statediff.Leaf,
+						StorageDiffs: emptyStorage,
+						LeafKey:      common.HexToHash("ce5783bc1e69eedf90f402e11f6862da14ed8e50156635a04d6393bbae154012").Bytes(),
+						NodeValue:    block3MovedPremineLeafNode2,
+					},
+					{ // this is the new account created due to the coinbase mining a block, it's creation shouldn't affect 0x 0e 05 07
+						Path:         []byte{'\x06', '\x0e', '\x0f'},
+						NodeType:     statediff.Leaf,
+						StorageDiffs: emptyStorage,
+						LeafKey:      block3CoinbaseHash.Bytes(),
+						NodeValue:    block3CoinbaseLeafNode,
+					},
 				},
 			},
 		},
 	}
 
 	for _, test := range tests {
-		arguments := test.startingArguments
-		diff, err := builder.BuildStateDiff(arguments.oldStateRoot, arguments.newStateRoot, arguments.blockNumber, arguments.blockHash)
+		diff, err := builder.BuildStateDiff(test.startingArguments, params)
 		if err != nil {
 			t.Error(err)
 		}
