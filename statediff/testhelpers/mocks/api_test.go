@@ -79,6 +79,12 @@ var (
 		bankAccount,
 	})
 	mockTotalDifficulty = big.NewInt(1337)
+	params              = statediff.Params{
+		IntermediateStateNodes: false,
+		IncludeTD:              true,
+		IncludeBlock:           true,
+		IncludeReceipts:        true,
+	}
 )
 
 func TestAPI(t *testing.T) {
@@ -102,7 +108,7 @@ func testSubscriptionAPI(t *testing.T) {
 	expectedStateDiff := statediff.StateDiff{
 		BlockNumber: block1.Number(),
 		BlockHash:   block1.Hash(),
-		CreatedNodes: []statediff.StateNode{
+		Nodes: []statediff.StateNode{
 			{
 				Path:         []byte{'\x05'},
 				NodeType:     statediff.Leaf,
@@ -125,42 +131,29 @@ func testSubscriptionAPI(t *testing.T) {
 				StorageDiffs: emptyStorage,
 			},
 		},
-		DeletedNodes: []statediff.StateNode{ // This leaf appears to be deleted since it is turned into a branch node
-			{ // It would instead show up in the UpdateAccounts as new branch node IF intermediate node diffing was turned on (as it is in the test below)
-				Path:         []byte{},
-				NodeType:     statediff.Removed,
-				LeafKey:      testhelpers.BankLeafKey,
-				NodeValue:    []byte{},
-				StorageDiffs: emptyStorage,
-			},
-		},
-		UpdatedNodes: emptyAccounts,
 	}
 	expectedStateDiffBytes, _ := rlp.EncodeToBytes(expectedStateDiff)
 	blockChan := make(chan *types.Block)
 	parentBlockChain := make(chan *types.Block)
 	serviceQuitChan := make(chan bool)
-	config := statediff.Config{
-		IntermediateNodes: false,
-	}
 	mockBlockChain := &BlockChain{}
 	mockBlockChain.SetReceiptsForHash(block1Hash, types.Receipts{mockReceipt})
 	mockBlockChain.SetTdByHash(block1Hash, mockTotalDifficulty)
 	mockService := MockStateDiffService{
-		Mutex:           sync.Mutex{},
-		Builder:         statediff.NewBuilder(chain, config),
-		BlockChan:       blockChan,
-		BlockChain:      mockBlockChain,
-		ParentBlockChan: parentBlockChain,
-		QuitChan:        serviceQuitChan,
-		Subscriptions:   make(map[rpc.ID]statediff.Subscription),
-		streamBlock:     true,
+		Mutex:             sync.Mutex{},
+		Builder:           statediff.NewBuilder(chain.StateCache()),
+		BlockChan:         blockChan,
+		BlockChain:        mockBlockChain,
+		ParentBlockChan:   parentBlockChain,
+		QuitChan:          serviceQuitChan,
+		Subscriptions:     make(map[common.Hash]map[rpc.ID]statediff.Subscription),
+		SubscriptionTypes: make(map[common.Hash]statediff.Params),
 	}
 	mockService.Start(nil)
 	id := rpc.NewID()
 	payloadChan := make(chan statediff.Payload)
 	quitChan := make(chan bool)
-	mockService.Subscribe(id, payloadChan, quitChan)
+	mockService.Subscribe(id, payloadChan, quitChan, params)
 	blockChan <- block1
 	parentBlockChain <- block0
 
@@ -201,7 +194,7 @@ func testHTTPAPI(t *testing.T) {
 	expectedStateDiff := statediff.StateDiff{
 		BlockNumber: block1.Number(),
 		BlockHash:   block1.Hash(),
-		CreatedNodes: []statediff.StateNode{
+		Nodes: []statediff.StateNode{
 			{
 				Path:         []byte{'\x05'},
 				NodeType:     statediff.Leaf,
@@ -224,33 +217,19 @@ func testHTTPAPI(t *testing.T) {
 				StorageDiffs: emptyStorage,
 			},
 		},
-		DeletedNodes: []statediff.StateNode{ // This leaf appears to be deleted since it is turned into a branch node
-			{ // It would instead show up in the UpdateAccounts as new branch node IF intermediate node diffing was turned on (as it is in the test below)
-				Path:         []byte{},
-				NodeType:     statediff.Removed,
-				LeafKey:      testhelpers.BankLeafKey,
-				NodeValue:    []byte{},
-				StorageDiffs: emptyStorage,
-			},
-		},
-		UpdatedNodes: emptyAccounts,
 	}
 	expectedStateDiffBytes, _ := rlp.EncodeToBytes(expectedStateDiff)
-	config := statediff.Config{
-		IntermediateNodes: false,
-	}
 	mockBlockChain := &BlockChain{}
 	mockBlockChain.SetBlocksForHashes(blockMap)
 	mockBlockChain.SetBlockForNumber(block1, block1.Number().Uint64())
 	mockBlockChain.SetReceiptsForHash(block1Hash, types.Receipts{mockReceipt})
 	mockBlockChain.SetTdByHash(block1Hash, big.NewInt(1337))
 	mockService := MockStateDiffService{
-		Mutex:       sync.Mutex{},
-		Builder:     statediff.NewBuilder(chain, config),
-		BlockChain:  mockBlockChain,
-		streamBlock: true,
+		Mutex:      sync.Mutex{},
+		Builder:    statediff.NewBuilder(chain.StateCache()),
+		BlockChain: mockBlockChain,
 	}
-	payload, err := mockService.StateDiffAt(block1.Number().Uint64())
+	payload, err := mockService.StateDiffAt(block1.Number().Uint64(), params)
 	if err != nil {
 		t.Error(err)
 	}
