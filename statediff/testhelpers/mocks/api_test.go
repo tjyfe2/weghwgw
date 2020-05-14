@@ -33,12 +33,10 @@ import (
 )
 
 var (
-	emptyStorage              = make([]statediff.StorageNode, 0)
-	emptyAccounts             = make([]statediff.StateNode, 0)
-	block0, block1            *types.Block
-	minerLeafKey              = testhelpers.AddressToLeafKey(common.HexToAddress("0x0"))
-	emptyStateNodeEventualMap = make([]statediff.StateNode, 0)
-	account1, _               = rlp.EncodeToBytes(state.Account{
+	emptyStorage   = make([]statediff.StorageNode, 0)
+	block0, block1 *types.Block
+	minerLeafKey   = testhelpers.AddressToLeafKey(common.HexToAddress("0x0"))
+	account1, _    = rlp.EncodeToBytes(state.Account{
 		Nonce:    uint64(0),
 		Balance:  big.NewInt(10000),
 		CodeHash: common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").Bytes(),
@@ -47,16 +45,6 @@ var (
 	account1LeafNode, _ = rlp.EncodeToBytes([]interface{}{
 		common.Hex2Bytes("3926db69aaced518e9b9f0f434a473e7174109c943548bb8f23be41ca76d9ad2"),
 		account1,
-	})
-	bankAccountAtBlock0, _ = rlp.EncodeToBytes(state.Account{
-		Nonce:    testhelpers.Nonce0,
-		Balance:  big.NewInt(testhelpers.TestBankFunds.Int64()),
-		CodeHash: testhelpers.NullCodeHash.Bytes(),
-		Root:     testhelpers.EmptyContractRoot,
-	})
-	bankAccountAtBlock0LeafNode, _ = rlp.EncodeToBytes([]interface{}{
-		common.Hex2Bytes("2000bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
-		bankAccountAtBlock0,
 	})
 	minerAccount, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    uint64(0),
