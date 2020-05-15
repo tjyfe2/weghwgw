@@ -81,12 +81,10 @@ func TestAPI(t *testing.T) {
 }
 
 func testSubscriptionAPI(t *testing.T) {
-	_, blockMap, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
+	blocks, chain := testhelpers.MakeChain(1, testhelpers.Genesis)
 	defer chain.Stop()
-	block0Hash := common.HexToHash("0xd1721cfd0b29c36fd7a68f25c128e86413fb666a6e1d68e89b875bd299262661")
-	block1Hash := common.HexToHash("0xbbe88de60ba33a3f18c0caa37d827bfb70252e19e40a07cd34041696c35ecb1a")
-	block0 = blockMap[block0Hash]
-	block1 = blockMap[block1Hash]
+	block0 = testhelpers.Genesis
+	block1 = blocks[0]
 	expectedBlockRlp, _ := rlp.EncodeToBytes(block1)
 	mockReceipt := &types.Receipt{
 		BlockNumber: block1.Number(),
@@ -125,8 +123,8 @@ func testSubscriptionAPI(t *testing.T) {
 	parentBlockChain := make(chan *types.Block)
 	serviceQuitChan := make(chan bool)
 	mockBlockChain := &BlockChain{}
-	mockBlockChain.SetReceiptsForHash(block1Hash, types.Receipts{mockReceipt})
-	mockBlockChain.SetTdByHash(block1Hash, mockTotalDifficulty)
+	mockBlockChain.SetReceiptsForHash(block1.Hash(), types.Receipts{mockReceipt})
+	mockBlockChain.SetTdByHash(block1.Hash(), mockTotalDifficulty)
 	mockService := MockStateDiffService{
 		Mutex:             sync.Mutex{},
 		Builder:           statediff.NewBuilder(chain.StateCache()),
@@ -167,12 +165,10 @@ func testSubscriptionAPI(t *testing.T) {
 }
 
 func testHTTPAPI(t *testing.T) {
-	_, blockMap, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
+	blocks, chain := testhelpers.MakeChain(1, testhelpers.Genesis)
 	defer chain.Stop()
-	block0Hash := common.HexToHash("0xd1721cfd0b29c36fd7a68f25c128e86413fb666a6e1d68e89b875bd299262661")
-	block1Hash := common.HexToHash("0xbbe88de60ba33a3f18c0caa37d827bfb70252e19e40a07cd34041696c35ecb1a")
-	block0 = blockMap[block0Hash]
-	block1 = blockMap[block1Hash]
+	block0 = testhelpers.Genesis
+	block1 = blocks[0]
 	expectedBlockRlp, _ := rlp.EncodeToBytes(block1)
 	mockReceipt := &types.Receipt{
 		BlockNumber: block1.Number(),
@@ -208,10 +204,13 @@ func testHTTPAPI(t *testing.T) {
 	}
 	expectedStateDiffBytes, _ := rlp.EncodeToBytes(expectedStateDiff)
 	mockBlockChain := &BlockChain{}
-	mockBlockChain.SetBlocksForHashes(blockMap)
+	mockBlockChain.SetBlocksForHashes(map[common.Hash]*types.Block{
+		block0.Hash(): block0,
+		block1.Hash(): block1,
+	})
 	mockBlockChain.SetBlockForNumber(block1, block1.Number().Uint64())
-	mockBlockChain.SetReceiptsForHash(block1Hash, types.Receipts{mockReceipt})
-	mockBlockChain.SetTdByHash(block1Hash, big.NewInt(1337))
+	mockBlockChain.SetReceiptsForHash(block1.Hash(), types.Receipts{mockReceipt})
+	mockBlockChain.SetTdByHash(block1.Hash(), big.NewInt(1337))
 	mockService := MockStateDiffService{
 		Mutex:      sync.Mutex{},
 		Builder:    statediff.NewBuilder(chain.StateCache()),

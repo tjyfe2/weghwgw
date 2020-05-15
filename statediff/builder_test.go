@@ -267,13 +267,13 @@ var (
 )
 
 func TestBuilder(t *testing.T) {
-	BlockHashes, blockMap, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
+	blocks, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
 	contractLeafKey = testhelpers.AddressToLeafKey(testhelpers.ContractAddr)
 	defer chain.Stop()
-	block0 = blockMap[BlockHashes[3]]
-	block1 = blockMap[BlockHashes[2]]
-	block2 = blockMap[BlockHashes[1]]
-	block3 = blockMap[BlockHashes[0]]
+	block0 = testhelpers.Genesis
+	block1 = blocks[0]
+	block2 = blocks[1]
+	block3 = blocks[2]
 	params := statediff.Params{}
 	builder = statediff.NewBuilder(chain.StateCache())
 
@@ -492,13 +492,13 @@ func TestBuilder(t *testing.T) {
 }
 
 func TestBuilderWithIntermediateNodes(t *testing.T) {
-	BlockHashes, blockMap, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
+	blocks, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
 	contractLeafKey = testhelpers.AddressToLeafKey(testhelpers.ContractAddr)
 	defer chain.Stop()
-	block0 = blockMap[BlockHashes[3]]
-	block1 = blockMap[BlockHashes[2]]
-	block2 = blockMap[BlockHashes[1]]
-	block3 = blockMap[BlockHashes[0]]
+	block0 = testhelpers.Genesis
+	block1 = blocks[0]
+	block2 = blocks[1]
+	block3 = blocks[2]
 	params := statediff.Params{
 		IntermediateStateNodes:   true,
 		IntermediateStorageNodes: true,
@@ -743,13 +743,13 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 }
 
 func TestBuilderWithWatchedAddressList(t *testing.T) {
-	BlockHashes, blockMap, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
+	blocks, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
 	contractLeafKey = testhelpers.AddressToLeafKey(testhelpers.ContractAddr)
 	defer chain.Stop()
-	block0 = blockMap[BlockHashes[3]]
-	block1 = blockMap[BlockHashes[2]]
-	block2 = blockMap[BlockHashes[1]]
-	block3 = blockMap[BlockHashes[0]]
+	block0 = testhelpers.Genesis
+	block1 = blocks[0]
+	block2 = blocks[1]
+	block3 = blocks[2]
 	params := statediff.Params{
 		WatchedAddresses: []common.Address{testhelpers.Account1Addr, testhelpers.ContractAddr},
 	}
@@ -912,13 +912,13 @@ func TestBuilderWithWatchedAddressList(t *testing.T) {
 }
 
 func TestBuilderWithWatchedAddressAndStorageKeyList(t *testing.T) {
-	BlockHashes, blockMap, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
+	blocks, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
 	contractLeafKey = testhelpers.AddressToLeafKey(testhelpers.ContractAddr)
 	defer chain.Stop()
-	block0 = blockMap[BlockHashes[3]]
-	block1 = blockMap[BlockHashes[2]]
-	block2 = blockMap[BlockHashes[1]]
-	block3 = blockMap[BlockHashes[0]]
+	block0 = testhelpers.Genesis
+	block1 = blocks[0]
+	block2 = blocks[1]
+	block3 = blocks[2]
 	params := statediff.Params{
 		WatchedAddresses:    []common.Address{testhelpers.Account1Addr, testhelpers.ContractAddr},
 		WatchedStorageSlots: []common.Hash{originalStorageKey},

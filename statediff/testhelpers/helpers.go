@@ -29,22 +29,11 @@ import (
 )
 
 // MakeChain creates a chain of n blocks starting at and including parent.
-// the returned hash chain is ordered head->parent. In addition, every 3rd block
-// contains a transaction and every 5th an uncle to allow testing correct block
-// reassembly.
-func MakeChain(n int, parent *types.Block) ([]common.Hash, map[common.Hash]*types.Block, *core.BlockChain) {
+// the returned hash chain is ordered head->parent.
+func MakeChain(n int, parent *types.Block) ([]*types.Block, *core.BlockChain) {
 	blocks, _ := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), Testdb, n, testChainGen)
 	chain, _ := core.NewBlockChain(Testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil)
-
-	hashes := make([]common.Hash, n+1)
-	hashes[len(hashes)-1] = parent.Hash()
-	blockm := make(map[common.Hash]*types.Block, n+1)
-	blockm[parent.Hash()] = parent
-	for i, b := range blocks {
-		hashes[len(hashes)-i-2] = b.Hash()
-		blockm[b.Hash()] = b
-	}
-	return hashes, blockm, chain
+	return blocks, chain
 }
 
 func testChainGen(i int, block *core.BlockGen) {
