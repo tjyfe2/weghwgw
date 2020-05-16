@@ -109,6 +109,8 @@ var (
 	queuedGauge  = metrics.NewRegisteredGauge("txpool/queued", nil)
 	localGauge   = metrics.NewRegisteredGauge("txpool/local", nil)
 	slotsGauge   = metrics.NewRegisteredGauge("txpool/slots", nil)
+
+	reorgTimer = metrics.NewRegisteredTimer("txpool/reorg", nil)
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -1015,6 +1017,7 @@ func (pool *TxPool) scheduleReorgLoop() {
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*txSortedMap) {
 	defer close(done)
+	var start = time.Now()
 
 	var promoteAddrs []common.Address
 	if dirtyAccounts != nil {
@@ -1062,6 +1065,8 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		txs := list.Flatten() // Heavy but will be cached and is needed by the miner anyway
 		pool.pendingNonces.set(addr, txs[len(txs)-1].Nonce()+1)
 	}
+
+	reorgTimer.UpdateSince(start)
 	pool.mu.Unlock()
 
 	// Notify subsystems for newly added transactions
