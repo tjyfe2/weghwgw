@@ -33,14 +33,14 @@ import (
 
 // TODO: add test that filters on address
 var (
-	contractLeafKey                []byte
-	emptyDiffs                     = make([]statediff.StateNode, 0)
-	emptyStorage                   = make([]statediff.StorageNode, 0)
-	block0, block1, block2, block3 *types.Block
-	builder                        statediff.Builder
-	miningReward                   = int64(2000000000000000000)
-	minerAddress                   = common.HexToAddress("0x0")
-	minerLeafKey                   = testhelpers.AddressToLeafKey(minerAddress)
+	contractLeafKey, emptyContractLeafKey []byte
+	emptyDiffs                            = make([]statediff.StateNode, 0)
+	emptyStorage                          = make([]statediff.StorageNode, 0)
+	block0, block1, block2, block3        *types.Block
+	builder                               statediff.Builder
+	miningReward                          = int64(2000000000000000000)
+	minerAddress                          = common.HexToAddress("0x0")
+	minerLeafKey                          = testhelpers.AddressToLeafKey(minerAddress)
 
 	balanceChange10000         = int64(10000)
 	balanceChange1000          = int64(1000)
@@ -77,6 +77,16 @@ var (
 		common.Hex2Bytes("2000bf49f440a1cd0527e4d06e2765654c0f56452257516d793a9b8d604dcfdf2a"),
 		bankAccountAtBlock0,
 	})
+	emptyContractAtBlock1, _ = rlp.EncodeToBytes(state.Account{
+		Nonce:    testhelpers.Nonce0,
+		Balance:  big.NewInt(0),
+		CodeHash: testhelpers.NullCodeHash.Bytes(),
+		Root:     testhelpers.EmptyContractRoot,
+	})
+	emptyContractAtBlock1LeafNode, _ = rlp.EncodeToBytes([]interface{}{
+		common.Hex2Bytes("38f0847834712d0d4a56cc9fd09ca7a91cd58d022e0f3790ef365ae82a471419"),
+		emptyContractAtBlock1,
+	})
 	account1AtBlock1, _ = rlp.EncodeToBytes(state.Account{
 		Nonce:    testhelpers.Nonce0,
 		Balance:  big.NewInt(balanceChange10000),
@@ -98,7 +108,7 @@ var (
 		minerAccountAtBlock1,
 	})
 	bankAccountAtBlock1, _ = rlp.EncodeToBytes(state.Account{
-		Nonce:    testhelpers.Nonce1,
+		Nonce:    testhelpers.Nonce2,
 		Balance:  big.NewInt(testhelpers.TestBankFunds.Int64() - balanceChange10000),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
@@ -128,7 +138,7 @@ var (
 		contractAccountAtBlock2,
 	})
 	bankAccountAtBlock2, _ = rlp.EncodeToBytes(state.Account{
-		Nonce:    testhelpers.Nonce2,
+		Nonce:    testhelpers.Nonce3,
 		Balance:  big.NewInt(block1BankBalance - balanceChange1000),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
@@ -178,7 +188,7 @@ var (
 		contractAccountAtBlock3,
 	})
 	bankAccountAtBlock3, _ = rlp.EncodeToBytes(state.Account{
-		Nonce:    testhelpers.Nonce3,
+		Nonce:    testhelpers.Nonce4,
 		Balance:  big.NewInt(99989000),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
@@ -191,7 +201,7 @@ var (
 	block1BranchNode, _ = rlp.EncodeToBytes([]interface{}{
 		crypto.Keccak256(bankAccountAtBlock1LeafNode),
 		[]byte{},
-		[]byte{},
+		crypto.Keccak256(emptyContractAtBlock1LeafNode),
 		[]byte{},
 		[]byte{},
 		crypto.Keccak256(minerAccountAtBlock1LeafNode),
@@ -210,7 +220,7 @@ var (
 	block2BranchNode, _ = rlp.EncodeToBytes([]interface{}{
 		crypto.Keccak256(bankAccountAtBlock2LeafNode),
 		[]byte{},
-		[]byte{},
+		crypto.Keccak256(emptyContractAtBlock1LeafNode),
 		[]byte{},
 		[]byte{},
 		crypto.Keccak256(minerAccountAtBlock2LeafNode),
@@ -229,7 +239,7 @@ var (
 	block3BranchNode, _ = rlp.EncodeToBytes([]interface{}{
 		crypto.Keccak256(bankAccountAtBlock3LeafNode),
 		[]byte{},
-		[]byte{},
+		crypto.Keccak256(emptyContractAtBlock1LeafNode),
 		[]byte{},
 		[]byte{},
 		crypto.Keccak256(minerAccountAtBlock2LeafNode),
@@ -269,6 +279,7 @@ var (
 func TestBuilder(t *testing.T) {
 	blocks, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
 	contractLeafKey = testhelpers.AddressToLeafKey(testhelpers.ContractAddr)
+	emptyContractLeafKey = testhelpers.AddressToLeafKey(testhelpers.EmptyContractAddr)
 	defer chain.Stop()
 	block0 = testhelpers.Genesis
 	block1 = blocks[0]
@@ -337,6 +348,13 @@ func TestBuilder(t *testing.T) {
 						NodeType:     statediff.Leaf,
 						LeafKey:      testhelpers.BankLeafKey,
 						NodeValue:    bankAccountAtBlock1LeafNode,
+						StorageDiffs: emptyStorage,
+					},
+					{
+						Path:         []byte{'\x02'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      emptyContractLeafKey,
+						NodeValue:    emptyContractAtBlock1LeafNode,
 						StorageDiffs: emptyStorage,
 					},
 					{
@@ -494,6 +512,7 @@ func TestBuilder(t *testing.T) {
 func TestBuilderWithIntermediateNodes(t *testing.T) {
 	blocks, chain := testhelpers.MakeChain(3, testhelpers.Genesis)
 	contractLeafKey = testhelpers.AddressToLeafKey(testhelpers.ContractAddr)
+	emptyContractLeafKey = testhelpers.AddressToLeafKey(testhelpers.EmptyContractAddr)
 	defer chain.Stop()
 	block0 = testhelpers.Genesis
 	block1 = blocks[0]
@@ -571,6 +590,13 @@ func TestBuilderWithIntermediateNodes(t *testing.T) {
 						NodeType:     statediff.Leaf,
 						LeafKey:      testhelpers.BankLeafKey,
 						NodeValue:    bankAccountAtBlock1LeafNode,
+						StorageDiffs: emptyStorage,
+					},
+					{
+						Path:         []byte{'\x02'},
+						NodeType:     statediff.Leaf,
+						LeafKey:      emptyContractLeafKey,
+						NodeValue:    emptyContractAtBlock1LeafNode,
 						StorageDiffs: emptyStorage,
 					},
 					{

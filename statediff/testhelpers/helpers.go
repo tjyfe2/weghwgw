@@ -31,7 +31,10 @@ import (
 // MakeChain creates a chain of n blocks starting at and including parent.
 // the returned hash chain is ordered head->parent.
 func MakeChain(n int, parent *types.Block) ([]*types.Block, *core.BlockChain) {
-	blocks, _ := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), Testdb, n, testChainGen)
+	config := params.TestChainConfig
+	config.EIP158Block = big.NewInt(2)
+	config.ByzantiumBlock = big.NewInt(2)
+	blocks, _ := core.GenerateChain(config, parent, ethash.NewFaker(), Testdb, n, testChainGen)
 	chain, _ := core.NewBlockChain(Testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil)
 	return blocks, chain
 }
@@ -41,8 +44,14 @@ func testChainGen(i int, block *core.BlockGen) {
 	switch i {
 	case 0:
 		// In block 1, the test bank sends account #1 some ether.
-		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), Account1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, TestBankKey)
-		block.AddTx(tx)
+		// And the bank makes an empty contract account (to be removed by EIP-158)
+		nonce := block.TxNonce(TestBankAddress)
+		tx1, _ := types.SignTx(types.NewTransaction(nonce, Account1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, TestBankKey)
+		nonce++
+		tx2, _ := types.SignTx(types.NewContractCreation(nonce, big.NewInt(0), 1000000, big.NewInt(0), EmptyContractCode), signer, TestBankKey)
+		EmptyContractAddr = crypto.CreateAddress(TestBankAddress, nonce)
+		block.AddTx(tx1)
+		block.AddTx(tx2)
 	case 1:
 		// In block 2, the test bank sends some more ether to account #1.
 		// account1Addr passes it on to account #2.
@@ -57,12 +66,33 @@ func testChainGen(i int, block *core.BlockGen) {
 		block.AddTx(tx2)
 		block.AddTx(tx3)
 	case 2:
-		// Block 3 has a single tx from the bankAccount to the contract, that transfers no value, that is mined by account2
+		// Block 3 has a single tx from the bankAccount to the contract, that transfers no value
+		// Block is mined by account2
 		block.SetCoinbase(Account2Addr)
 		//get function: 60cd2685
 		//put function: c16431b9
 		data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003")
 		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), ContractAddr, big.NewInt(0), 100000, nil, data), signer, TestBankKey)
 		block.AddTx(tx)
+	case 3:
+		// Block 4 has two more txs from the bankAccount to the contract, that transfer no value
+		// Block is mined by account1
+		block.SetCoinbase(Account1Addr)
+		data1 := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000005")
+		data2 := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000002")
+		tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), ContractAddr, big.NewInt(0), 100000, nil, data1), signer, TestBankKey)
+		tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), ContractAddr, big.NewInt(0), 100000, nil, data2), signer, TestBankKey)
+		block.AddTx(tx1)
+		block.AddTx(tx2)
+	case 4:
+		// Block 5 has two more txs from the bankAccount to the contract, that transfer no value and set slot positions to 0
+		// Block is mined by new Account3Addr
+		block.SetCoinbase(Account3Addr)
+		data1 := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000")
+		data2 := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000")
+		tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), ContractAddr, big.NewInt(0), 100000, nil, data1), signer, TestBankKey)
+		tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), ContractAddr, big.NewInt(0), 100000, nil, data2), signer, TestBankKey)
+		block.AddTx(tx1)
+		block.AddTx(tx2)
 	}
 }
