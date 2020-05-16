@@ -33,14 +33,14 @@ import (
 
 // TODO: add test that filters on address
 var (
-	contractLeafKey, emptyContractLeafKey []byte
-	emptyDiffs                            = make([]statediff.StateNode, 0)
-	emptyStorage                          = make([]statediff.StorageNode, 0)
-	block0, block1, block2, block3        *types.Block
-	builder                               statediff.Builder
-	miningReward                          = int64(2000000000000000000)
-	minerAddress                          = common.HexToAddress("0x0")
-	minerLeafKey                          = testhelpers.AddressToLeafKey(minerAddress)
+	contractLeafKey, emptyContractLeafKey, contract2LeafKey []byte
+	emptyDiffs                                              = make([]statediff.StateNode, 0)
+	emptyStorage                                            = make([]statediff.StorageNode, 0)
+	block0, block1, block2, block3                          *types.Block
+	builder                                                 statediff.Builder
+	miningReward                                            = int64(2000000000000000000)
+	minerAddress                                            = common.HexToAddress("0x0")
+	minerLeafKey                                            = testhelpers.AddressToLeafKey(minerAddress)
 
 	balanceChange10000         = int64(10000)
 	balanceChange1000          = int64(1000)
@@ -1097,6 +1097,135 @@ func TestBuilderWithWatchedAddressAndStorageKeyList(t *testing.T) {
 		if !bytes.Equal(receivedStateDiffRlp, expectedStateDiffRlp) {
 			t.Logf("Test failed: %s", test.name)
 			t.Errorf("actual state diff: %+v\nexpected state diff: %+v", diff, test.expected)
+		}
+	}
+}
+
+func TestBuilderWithMoreAndRemovedStorage(t *testing.T) {
+	blocks, chain := testhelpers.MakeChain(5, testhelpers.Genesis)
+	contractLeafKey = testhelpers.AddressToLeafKey(testhelpers.ContractAddr)
+	emptyContractLeafKey = testhelpers.AddressToLeafKey(testhelpers.EmptyContractAddr)
+	defer chain.Stop()
+	block4 := blocks[3]
+	block5 := blocks[4]
+	params := statediff.Params{
+		IntermediateStateNodes:   true,
+		IntermediateStorageNodes: true,
+	}
+	builder = statediff.NewBuilder(chain.StateCache())
+
+	var tests = []struct {
+		name              string
+		startingArguments statediff.Args
+		expected          *statediff.StateDiff
+	}{
+		// blocks 0-3 are the same as in TestBuilderWithIntermediateNodes
+		{
+			"testBlock4",
+			statediff.Args{
+				OldStateRoot: block3.Root(),
+				NewStateRoot: block4.Root(),
+				BlockNumber:  block4.Number(),
+				BlockHash:    block4.Hash(),
+			},
+			&statediff.StateDiff{
+				BlockNumber: block4.Number(),
+				BlockHash:   block4.Hash(),
+				Nodes:       []statediff.StateNode{},
+			},
+		},
+		{
+			"testBlock5",
+			statediff.Args{
+				OldStateRoot: block4.Root(),
+				NewStateRoot: block5.Root(),
+				BlockNumber:  block5.Number(),
+				BlockHash:    block5.Hash(),
+			},
+			&statediff.StateDiff{
+				BlockNumber: block5.Number(),
+				BlockHash:   block5.Hash(),
+				Nodes:       []statediff.StateNode{},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		diff, err := builder.BuildStateDiff(test.startingArguments, params)
+		if err != nil {
+			t.Error(err)
+		}
+		receivedStateDiffRlp, err := rlp.EncodeToBytes(diff)
+		if err != nil {
+			t.Error(err)
+		}
+		expectedStateDiffRlp, err := rlp.EncodeToBytes(test.expected)
+		if err != nil {
+			t.Error(err)
+		}
+		sort.Slice(receivedStateDiffRlp, func(i, j int) bool { return receivedStateDiffRlp[i] < receivedStateDiffRlp[j] })
+		sort.Slice(expectedStateDiffRlp, func(i, j int) bool { return expectedStateDiffRlp[i] < expectedStateDiffRlp[j] })
+		if !bytes.Equal(receivedStateDiffRlp, expectedStateDiffRlp) {
+			t.Logf("Test failed: %s", test.name)
+			t.Errorf("actual state diff: %+v\r\n\r\n\r\nexpected state diff: %+v", diff, test.expected)
+		}
+	}
+}
+
+func TestBuilderWithEIP158RemovedAccount(t *testing.T) {
+	blocks, chain := testhelpers.MakeChain(6, testhelpers.Genesis)
+	contractLeafKey = testhelpers.AddressToLeafKey(testhelpers.ContractAddr)
+	emptyContractLeafKey = testhelpers.AddressToLeafKey(testhelpers.EmptyContractAddr)
+	contract2LeafKey = testhelpers.AddressToLeafKey(testhelpers.ContractAddr2)
+	defer chain.Stop()
+	block5 := blocks[4]
+	block6 := blocks[5]
+	params := statediff.Params{
+		IntermediateStateNodes:   true,
+		IntermediateStorageNodes: true,
+	}
+	builder = statediff.NewBuilder(chain.StateCache())
+
+	var tests = []struct {
+		name              string
+		startingArguments statediff.Args
+		expected          *statediff.StateDiff
+	}{
+		// blocks 0-5 are the same as in TestBuilderWithIntermediateNodes and TestBuilderWithMoreAndRemovedStorage
+		{
+			"testBlock6",
+			statediff.Args{
+				OldStateRoot: block5.Root(),
+				NewStateRoot: block6.Root(),
+				BlockNumber:  block6.Number(),
+				BlockHash:    block6.Hash(),
+			},
+			&statediff.StateDiff{
+				BlockNumber: block6.Number(),
+				BlockHash:   block6.Hash(),
+				Nodes:       []statediff.StateNode{},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		diff, err := builder.BuildStateDiff(test.startingArguments, params)
+		if err != nil {
+			t.Error(err)
+		}
+		receivedStateDiffRlp, err := rlp.EncodeToBytes(diff)
+		if err != nil {
+			t.Error(err)
+		}
+		expectedStateDiffRlp, err := rlp.EncodeToBytes(test.expected)
+		if err != nil {
+			t.Error(err)
+		}
+		sort.Slice(receivedStateDiffRlp, func(i, j int) bool { return receivedStateDiffRlp[i] < receivedStateDiffRlp[j] })
+		sort.Slice(expectedStateDiffRlp, func(i, j int) bool { return expectedStateDiffRlp[i] < expectedStateDiffRlp[j] })
+		if !bytes.Equal(receivedStateDiffRlp, expectedStateDiffRlp) {
+			t.Logf("Test failed: %s", test.name)
+			t.Errorf("actual state diff: %+v\r\n\r\n\r\nexpected state diff: %+v", diff, test.expected)
 		}
 	}
 }
