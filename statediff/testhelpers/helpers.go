@@ -44,16 +44,8 @@ func testChainGen(i int, block *core.BlockGen) {
 	switch i {
 	case 0:
 		// In block 1, the test bank sends account #1 some ether.
-		// And the bank makes an empty contract account (to be removed by EIP-158)
-		nonce := block.TxNonce(TestBankAddress)
-		tx1, _ := types.SignTx(types.NewTransaction(nonce, Account1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, TestBankKey)
-		nonce++
-		// this creates an empty contract at 2f30668e69d30b6fc1609db5447c101e40dda113ac28be157d20bb61da8e5861
-		// it is created since we are not yet at EIP158 or Byzantium activation
-		tx2, _ := types.SignTx(types.NewContractCreation(nonce, big.NewInt(0), 1000000, big.NewInt(0), EmptyContractCode), signer, TestBankKey)
-		EmptyContractAddr = crypto.CreateAddress(TestBankAddress, nonce)
-		block.AddTx(tx1)
-		block.AddTx(tx2)
+		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), Account1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, TestBankKey)
+		block.AddTx(tx)
 	case 1:
 		// In block 2, the test bank sends some more ether to account #1.
 		// account1Addr passes it on to account #2.
@@ -68,11 +60,11 @@ func testChainGen(i int, block *core.BlockGen) {
 		block.AddTx(tx2)
 		block.AddTx(tx3)
 	case 2:
-		// Block 3 has a single tx from the bankAccount to the contract, that transfers no value
-		// Block is mined by account2
+		// Block 3 has a single tx from the bankAccount to the contract, that transfers no value, that is mined by account2
 		block.SetCoinbase(Account2Addr)
 		//get function: 60cd2685
 		//put function: c16431b9
+		//close function: 43d726d6
 		data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003")
 		tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(TestBankAddress), ContractAddr, big.NewInt(0), 100000, nil, data), signer, TestBankKey)
 		block.AddTx(tx)
@@ -103,13 +95,5 @@ func testChainGen(i int, block *core.BlockGen) {
 		block.AddTx(tx2)
 	case 5:
 		// Block 6 has a tx which creates a contract with leafkey 2f30668e69d30b6fc1609db5447c101e40dda113ac28be157d20bb61da8e5861
-		// which means the empty contract at 2f30668e69d30b6fc1609db5447c101e40dda113ac28be157d20bb61da8e5861 must be moved to a new path
-		// this should count as "touching" that account and cause it to be removed according to EIP-158
-		// Block is mined by Account2Addr
-		block.SetCoinbase(Account2Addr)
-		nonce := block.TxNonce(Account3Addr)
-		tx, _ := types.SignTx(types.NewContractCreation(nonce, big.NewInt(0), 1000000, big.NewInt(0), ContractCode), signer, Account3Key)
-		ContractAddr2 = crypto.CreateAddress(Account3Addr, nonce) //0xaE9BEa628c4Ce503DcFD7E305CaB4e29E7476592
-		block.AddTx(tx)
 	}
 }
