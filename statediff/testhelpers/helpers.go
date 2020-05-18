@@ -30,14 +30,34 @@ import (
 
 // MakeChain creates a chain of n blocks starting at and including parent.
 // the returned hash chain is ordered head->parent.
-func MakeChain(n int, parent *types.Block) ([]*types.Block, *core.BlockChain) {
+func MakeChain(n int, parent *types.Block, chainGen func(int, *core.BlockGen)) ([]*types.Block, *core.BlockChain) {
 	config := params.TestChainConfig
-	blocks, _ := core.GenerateChain(config, parent, ethash.NewFaker(), Testdb, n, testChainGen)
+	blocks, _ := core.GenerateChain(config, parent, ethash.NewFaker(), Testdb, n, chainGen)
 	chain, _ := core.NewBlockChain(Testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil)
 	return blocks, chain
 }
 
-func testChainGen(i int, block *core.BlockGen) {
+func TestSelfDestructChainGen(i int, block *core.BlockGen) {
+	signer := types.HomesteadSigner{}
+	switch i {
+	case 0:
+		// Block 1 is mined by Account1Addr
+		// Account1Addr creates a new contract
+		block.SetCoinbase(TestBankAddress)
+		tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(0), 1000000, big.NewInt(0), ContractCode), signer, TestBankKey)
+		ContractAddr = crypto.CreateAddress(TestBankAddress, 0)
+		block.AddTx(tx)
+	case 1:
+		// Block 2 is mined by Account1Addr
+		// Account1Addr self-destructs the contract
+		block.SetCoinbase(TestBankAddress)
+		data := common.Hex2Bytes("43D726D6")
+		tx, _ := types.SignTx(types.NewTransaction(1, ContractAddr, big.NewInt(0), 100000, nil, data), signer, TestBankKey)
+		block.AddTx(tx)
+	}
+}
+
+func TestChainGen(i int, block *core.BlockGen) {
 	signer := types.HomesteadSigner{}
 	switch i {
 	case 0:
@@ -53,7 +73,7 @@ func testChainGen(i int, block *core.BlockGen) {
 		tx2, _ := types.SignTx(types.NewTransaction(nonce, Account2Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, Account1Key)
 		nonce++
 		tx3, _ := types.SignTx(types.NewContractCreation(nonce, big.NewInt(0), 1000000, big.NewInt(0), ContractCode), signer, Account1Key)
-		ContractAddr = crypto.CreateAddress(Account1Addr, nonce) //0xaE9BEa628c4Ce503DcFD7E305CaB4e29E7476592
+		ContractAddr = crypto.CreateAddress(Account1Addr, nonce)
 		block.AddTx(tx1)
 		block.AddTx(tx2)
 		block.AddTx(tx3)

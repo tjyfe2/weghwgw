@@ -52,7 +52,7 @@ var (
 
 	// block 1 data
 	block1CoinbaseAccount, _ = rlp.EncodeToBytes(state.Account{
-		Nonce:    testhelpers.Nonce0,
+		Nonce:    0,
 		Balance:  big.NewInt(5000000000000000000),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
@@ -124,7 +124,7 @@ var (
 
 	// block 2 data
 	block2CoinbaseAccount, _ = rlp.EncodeToBytes(state.Account{
-		Nonce:    testhelpers.Nonce0,
+		Nonce:    0,
 		Balance:  big.NewInt(5000000000000000000),
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
@@ -136,7 +136,7 @@ var (
 	block2CoinbaseLeafNodeHash   = crypto.Keccak256(block2CoinbaseLeafNode)
 	block2MovedPremineBalance, _ = new(big.Int).SetString("4000000000000000000000", 10)
 	block2MovedPremineAccount, _ = rlp.EncodeToBytes(state.Account{
-		Nonce:    testhelpers.Nonce0,
+		Nonce:    0,
 		Balance:  block2MovedPremineBalance,
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
@@ -230,7 +230,7 @@ var (
 	// path 060e0f
 	blcok3CoinbaseBalance, _ = new(big.Int).SetString("5156250000000000000", 10)
 	block3CoinbaseAccount, _ = rlp.EncodeToBytes(state.Account{
-		Nonce:    testhelpers.Nonce0,
+		Nonce:    0,
 		Balance:  blcok3CoinbaseBalance,
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
@@ -243,7 +243,7 @@ var (
 	// path 0c0e050703
 	block3MovedPremineBalance1, _ = new(big.Int).SetString("3750000000000000000", 10)
 	block3MovedPremineAccount1, _ = rlp.EncodeToBytes(state.Account{
-		Nonce:    testhelpers.Nonce0,
+		Nonce:    0,
 		Balance:  block3MovedPremineBalance1,
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,
@@ -256,7 +256,7 @@ var (
 	// path 0c0e050708
 	block3MovedPremineBalance2, _ = new(big.Int).SetString("1999944000000000000000", 10)
 	block3MovedPremineAccount2, _ = rlp.EncodeToBytes(state.Account{
-		Nonce:    testhelpers.Nonce0,
+		Nonce:    0,
 		Balance:  block3MovedPremineBalance2,
 		CodeHash: testhelpers.NullCodeHash.Bytes(),
 		Root:     testhelpers.EmptyContractRoot,

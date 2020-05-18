@@ -81,7 +81,7 @@ func TestAPI(t *testing.T) {
 }
 
 func testSubscriptionAPI(t *testing.T) {
-	blocks, chain := testhelpers.MakeChain(1, testhelpers.Genesis)
+	blocks, chain := testhelpers.MakeChain(1, testhelpers.Genesis, testhelpers.TestChainGen)
 	defer chain.Stop()
 	block0 = testhelpers.Genesis
 	block1 = blocks[0]
@@ -165,7 +165,7 @@ func testSubscriptionAPI(t *testing.T) {
 }
 
 func testHTTPAPI(t *testing.T) {
-	blocks, chain := testhelpers.MakeChain(1, testhelpers.Genesis)
+	blocks, chain := testhelpers.MakeChain(1, testhelpers.Genesis, testhelpers.TestChainGen)
 	defer chain.Stop()
 	block0 = testhelpers.Genesis
 	block1 = blocks[0]
