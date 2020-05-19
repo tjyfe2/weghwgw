@@ -90,7 +90,12 @@ func (api *PublicStateDiffAPI) Stream(ctx context.Context, params Params) (*rpc.
 	return rpcSub, nil
 }
 
-// StateDiffAt returns a statediff payload at the specific blockheight
+// StateDiffAt returns a state diff payload at the specific blockheight
 func (api *PublicStateDiffAPI) StateDiffAt(ctx context.Context, blockNumber uint64, params Params) (*Payload, error) {
 	return api.sds.StateDiffAt(blockNumber, params)
+}
+
+// StateTrieAt returns a state trie payload at the specific blockheight
+func (api *PublicStateDiffAPI) StateTrieAt(ctx context.Context, blockNumber uint64, params Params) (*Payload, error) {
+	return api.sds.StateTrieAt(blockNumber, params)
 }

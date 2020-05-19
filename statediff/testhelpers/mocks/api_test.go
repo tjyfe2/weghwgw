@@ -91,7 +91,7 @@ func testSubscriptionAPI(t *testing.T) {
 		BlockHash:   block1.Hash(),
 	}
 	expectedReceiptBytes, _ := rlp.EncodeToBytes(types.Receipts{mockReceipt})
-	expectedStateDiff := statediff.StateDiff{
+	expectedStateDiff := statediff.StateObject{
 		BlockNumber: block1.Number(),
 		BlockHash:   block1.Hash(),
 		Nodes: []statediff.StateNode{
@@ -149,9 +149,9 @@ func testSubscriptionAPI(t *testing.T) {
 		if !bytes.Equal(payload.BlockRlp, expectedBlockRlp) {
 			t.Errorf("payload does not have expected block\r\nactual block rlp: %v\r\nexpected block rlp: %v", payload.BlockRlp, expectedBlockRlp)
 		}
-		sort.Slice(payload.StateDiffRlp, func(i, j int) bool { return payload.StateDiffRlp[i] < payload.StateDiffRlp[j] })
-		if !bytes.Equal(payload.StateDiffRlp, expectedStateDiffBytes) {
-			t.Errorf("payload does not have expected state diff\r\nactual state diff rlp: %v\r\nexpected state diff rlp: %v", payload.StateDiffRlp, expectedStateDiffBytes)
+		sort.Slice(payload.StateObjectRlp, func(i, j int) bool { return payload.StateObjectRlp[i] < payload.StateObjectRlp[j] })
+		if !bytes.Equal(payload.StateObjectRlp, expectedStateDiffBytes) {
+			t.Errorf("payload does not have expected state diff\r\nactual state diff rlp: %v\r\nexpected state diff rlp: %v", payload.StateObjectRlp, expectedStateDiffBytes)
 		}
 		if !bytes.Equal(expectedReceiptBytes, payload.ReceiptsRlp) {
 			t.Errorf("payload does not have expected receipts\r\nactual receipt rlp: %v\r\nexpected receipt rlp: %v", payload.ReceiptsRlp, expectedReceiptBytes)
@@ -175,7 +175,7 @@ func testHTTPAPI(t *testing.T) {
 		BlockHash:   block1.Hash(),
 	}
 	expectedReceiptBytes, _ := rlp.EncodeToBytes(types.Receipts{mockReceipt})
-	expectedStateDiff := statediff.StateDiff{
+	expectedStateDiff := statediff.StateObject{
 		BlockNumber: block1.Number(),
 		BlockHash:   block1.Hash(),
 		Nodes: []statediff.StateNode{
@@ -220,13 +220,13 @@ func testHTTPAPI(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	sort.Slice(payload.StateDiffRlp, func(i, j int) bool { return payload.StateDiffRlp[i] < payload.StateDiffRlp[j] })
+	sort.Slice(payload.StateObjectRlp, func(i, j int) bool { return payload.StateObjectRlp[i] < payload.StateObjectRlp[j] })
 	sort.Slice(expectedStateDiffBytes, func(i, j int) bool { return expectedStateDiffBytes[i] < expectedStateDiffBytes[j] })
 	if !bytes.Equal(payload.BlockRlp, expectedBlockRlp) {
 		t.Errorf("payload does not have expected block\r\nactual block rlp: %v\r\nexpected block rlp: %v", payload.BlockRlp, expectedBlockRlp)
 	}
-	if !bytes.Equal(payload.StateDiffRlp, expectedStateDiffBytes) {
-		t.Errorf("payload does not have expected state diff\r\nactual state diff rlp: %v\r\nexpected state diff rlp: %v", payload.StateDiffRlp, expectedStateDiffBytes)
+	if !bytes.Equal(payload.StateObjectRlp, expectedStateDiffBytes) {
+		t.Errorf("payload does not have expected state diff\r\nactual state diff rlp: %v\r\nexpected state diff rlp: %v", payload.StateObjectRlp, expectedStateDiffBytes)
 	}
 	if !bytes.Equal(expectedReceiptBytes, payload.ReceiptsRlp) {
 		t.Errorf("payload does not have expected receipts\r\nactual receipt rlp: %v\r\nexpected receipt rlp: %v", payload.ReceiptsRlp, expectedReceiptBytes)

@@ -56,7 +56,7 @@ type Payload struct {
 	BlockRlp        []byte   `json:"blockRlp"`
 	TotalDifficulty *big.Int `json:"totalDifficulty"`
 	ReceiptsRlp     []byte   `json:"receiptsRlp"`
-	StateDiffRlp    []byte   `json:"stateDiff"    gencodec:"required"`
+	StateObjectRlp  []byte   `json:"stateDiff"    gencodec:"required"`
 
 	encoded []byte
 	err     error
@@ -80,8 +80,8 @@ func (sd *Payload) Encode() ([]byte, error) {
 	return sd.encoded, sd.err
 }
 
-// StateDiff is the final output structure from the builder
-type StateDiff struct {
+// StateObject is the final output structure from the builder
+type StateObject struct {
 	BlockNumber *big.Int    `json:"blockNumber"     gencodec:"required"`
 	BlockHash   common.Hash `json:"blockHash"       gencodec:"required"`
 	Nodes       []StateNode `json:"Nodes" gencodec:"required"`

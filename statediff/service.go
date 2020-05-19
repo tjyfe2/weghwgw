@@ -56,8 +56,10 @@ type IService interface {
 	Subscribe(id rpc.ID, sub chan<- Payload, quitChan chan<- bool, params Params)
 	// Method to unsubscribe from state diff processing
 	Unsubscribe(id rpc.ID) error
-	// Method to get statediff at specific block
+	// Method to get state diff object at specific block
 	StateDiffAt(blockNumber uint64, params Params) (*Payload, error)
+	// Method to get state trie object at specific block
+	StateTrieAt(blockNumber uint64, params Params) (*Payload, error)
 }
 
 // Service is the underlying struct for the state diffing service
@@ -181,7 +183,7 @@ func (sds *Service) streamStateDiff(currentBlock *types.Block, parentRoot common
 
 // processStateDiff method builds the state diff payload from the current block, parent state root, and provided params
 func (sds *Service) processStateDiff(currentBlock *types.Block, parentRoot common.Hash, params Params) (*Payload, error) {
-	stateDiff, err := sds.Builder.BuildStateDiff(Args{
+	stateDiff, err := sds.Builder.BuildStateDiffObject(Args{
 		NewStateRoot: currentBlock.Root(),
 		OldStateRoot: parentRoot,
 		BlockHash:    currentBlock.Hash(),
@@ -195,7 +197,7 @@ func (sds *Service) processStateDiff(currentBlock *types.Block, parentRoot commo
 		return nil, err
 	}
 	payload := Payload{
-		StateDiffRlp: stateDiffRlp,
+		StateObjectRlp: stateDiffRlp,
 	}
 	if params.IncludeBlock {
 		blockBuff := new(bytes.Buffer)
@@ -275,8 +277,8 @@ func (sds *Service) Start(*p2p.Server) error {
 	return nil
 }
 
-// StateDiffAt returns a statediff payload at the specific blockheight
-// This operation cannot be performed back past the point of db pruning; it requires an archival node
+// StateDiffAt returns a state diff object payload at the specific blockheight
+// This operation cannot be performed back past the point of db pruning; it requires an archival node for historical data
 func (sds *Service) StateDiffAt(blockNumber uint64, params Params) (*Payload, error) {
 	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
 	log.Info(fmt.Sprintf("sending state diff at %d", blockNumber))
@@ -285,6 +287,47 @@ func (sds *Service) StateDiffAt(blockNumber uint64, params Params) (*Payload, er
 	}
 	parentBlock := sds.BlockChain.GetBlockByHash(currentBlock.ParentHash())
 	return sds.processStateDiff(currentBlock, parentBlock.Root(), params)
+}
+
+// StateTrieAt returns a state trie object payload at the specified blockheight
+// This operation cannot be performed back past the point of db pruning; it requires an archival node for historical data
+func (sds *Service) StateTrieAt(blockNumber uint64, params Params) (*Payload, error) {
+	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
+	log.Info(fmt.Sprintf("sending state trie at %d", blockNumber))
+	return sds.stateTrieAt(currentBlock, params)
+}
+
+func (sds *Service) stateTrieAt(block *types.Block, params Params) (*Payload, error) {
+	stateNodes, err := sds.Builder.BuildStateTrieObject(block)
+	if err != nil {
+		return nil, err
+	}
+	stateTrieRlp, err := rlp.EncodeToBytes(stateNodes)
+	if err != nil {
+		return nil, err
+	}
+	payload := Payload{
+		StateObjectRlp: stateTrieRlp,
+	}
+	if params.IncludeBlock {
+		blockBuff := new(bytes.Buffer)
+		if err = block.EncodeRLP(blockBuff); err != nil {
+			return nil, err
+		}
+		payload.BlockRlp = blockBuff.Bytes()
+	}
+	if params.IncludeTD {
+		payload.TotalDifficulty = sds.BlockChain.GetTdByHash(block.Hash())
+	}
+	if params.IncludeReceipts {
+		receiptBuff := new(bytes.Buffer)
+		receipts := sds.BlockChain.GetReceiptsByHash(block.Hash())
+		if err = rlp.Encode(receiptBuff, receipts); err != nil {
+			return nil, err
+		}
+		payload.ReceiptsRlp = receiptBuff.Bytes()
+	}
+	return &payload, nil
 }
 
 // Stop is used to close down the service

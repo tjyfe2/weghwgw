@@ -214,7 +214,7 @@ func TestGetStateDiffAt(t *testing.T) {
 }
 
 func testErrorInStateDiffAt(t *testing.T) {
-	mockStateDiff := statediff.StateDiff{
+	mockStateDiff := statediff.StateObject{
 		BlockNumber: testBlock1.Number(),
 		BlockHash:   testBlock1.Hash(),
 	}
@@ -231,9 +231,9 @@ func testErrorInStateDiffAt(t *testing.T) {
 		t.Error(err)
 	}
 	expectedStateDiffPayload := statediff.Payload{
-		StateDiffRlp: expectedStateDiffRlp,
-		ReceiptsRlp:  expectedReceiptsRlp,
-		BlockRlp:     expectedBlockRlp,
+		StateObjectRlp: expectedStateDiffRlp,
+		ReceiptsRlp:    expectedReceiptsRlp,
+		BlockRlp:       expectedBlockRlp,
 	}
 	expectedStateDiffPayloadRlp, err := rlp.EncodeToBytes(expectedStateDiffPayload)
 	if err != nil {

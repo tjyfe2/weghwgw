@@ -477,7 +477,7 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 	var tests = []struct {
 		name              string
 		startingArguments statediff.Args
-		expected          *statediff.StateDiff
+		expected          *statediff.StateObject
 	}{
 		{
 			"testBlock1",
@@ -488,7 +488,7 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 				BlockNumber:  block1.Number(),
 				BlockHash:    block1.Hash(),
 			},
-			&statediff.StateDiff{
+			&statediff.StateObject{
 				BlockNumber: block1.Number(),
 				BlockHash:   block1.Hash(),
 				Nodes: []statediff.StateNode{
@@ -531,7 +531,7 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 				BlockNumber:  block2.Number(),
 				BlockHash:    block2.Hash(),
 			},
-			&statediff.StateDiff{
+			&statediff.StateObject{
 				BlockNumber: block2.Number(),
 				BlockHash:   block2.Hash(),
 				Nodes: []statediff.StateNode{
@@ -589,7 +589,7 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 				BlockNumber:  block3.Number(),
 				BlockHash:    block3.Hash(),
 			},
-			&statediff.StateDiff{
+			&statediff.StateObject{
 				BlockNumber: block3.Number(),
 				BlockHash:   block3.Hash(),
 				Nodes: []statediff.StateNode{
@@ -662,7 +662,7 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		diff, err := builder.BuildStateDiff(test.startingArguments, params)
+		diff, err := builder.BuildStateDiffObject(test.startingArguments, params)
 		if err != nil {
 			t.Error(err)
 		}

@@ -17,6 +17,7 @@
 package mocks
 
 import (
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/statediff"
 )
 
@@ -24,20 +25,29 @@ import (
 type Builder struct {
 	Args         statediff.Args
 	Params       statediff.Params
-	stateDiff    statediff.StateDiff
+	stateDiff    statediff.StateObject
+	block        *types.Block
+	stateTrie    statediff.StateObject
 	builderError error
 }
 
-// BuildStateDiff mock method
-func (builder *Builder) BuildStateDiff(args statediff.Args, params statediff.Params) (statediff.StateDiff, error) {
+// BuildStateDiffObject mock method
+func (builder *Builder) BuildStateDiffObject(args statediff.Args, params statediff.Params) (statediff.StateObject, error) {
 	builder.Args = args
 	builder.Params = params
 
 	return builder.stateDiff, builder.builderError
 }
 
+// BuildStateTrieObject mock method
+func (builder *Builder) BuildStateTrieObject(block *types.Block) (statediff.StateObject, error) {
+	builder.block = block
+
+	return builder.stateTrie, builder.builderError
+}
+
 // SetStateDiffToBuild mock method
-func (builder *Builder) SetStateDiffToBuild(stateDiff statediff.StateDiff) {
+func (builder *Builder) SetStateDiffToBuild(stateDiff statediff.StateObject) {
 	builder.stateDiff = stateDiff
 }
 
