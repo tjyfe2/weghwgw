@@ -1968,12 +1968,11 @@ func TestBuilderWithMovedAccountOnlyLeafs(t *testing.T) {
 						NodeType:  statediff.Removed,
 						NodeValue: []byte{},
 					},
-					// For accounts that move up a level due to the deletion of the only other child account of a shared parent branch node,
-					// the leaf-only diffing process emits a node for the account at the new path
-					// but does not emit a "removed" node object for the now empty path
-					// Fix this, not a major issue since if you are not watching intermediate nodes you aren't worried about the complete picture in the first place
-					// One solution is to simply use the same process as when including intermediate nodes and simply discard the intermediate nodes
-					// But that method is significantly more memory intensive
+					{
+						Path:      []byte{'\x00'},
+						NodeType:  statediff.Removed,
+						NodeValue: []byte{},
+					},
 				},
 			},
 		},

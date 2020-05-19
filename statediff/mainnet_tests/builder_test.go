@@ -479,6 +479,8 @@ func TestBuilderOnMainnetBlocks(t *testing.T) {
 		startingArguments statediff.Args
 		expected          *statediff.StateObject
 	}{
+		// note that block0 (genesis) has over 1000 nodes due to the pre-allocation for the crowd-sale
+		// it is not feasible to write a unit test of that size at this time
 		{
 			"testBlock1",
 			//10000 transferred from testBankAddress to account1Addr

@@ -118,6 +118,17 @@ func (sds *MockStateDiffService) streamStateDiff(currentBlock *types.Block, pare
 	sds.Unlock()
 }
 
+// StateDiffAt mock method
+func (sds *MockStateDiffService) StateDiffAt(blockNumber uint64, params statediff.Params) (*statediff.Payload, error) {
+	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
+	log.Info(fmt.Sprintf("sending state diff at %d", blockNumber))
+	if blockNumber == 0 {
+		return sds.processStateDiff(currentBlock, common.Hash{}, params)
+	}
+	parentBlock := sds.BlockChain.GetBlockByHash(currentBlock.ParentHash())
+	return sds.processStateDiff(currentBlock, parentBlock.Root(), params)
+}
+
 // processStateDiff method builds the state diff payload from the current block, parent state root, and provided params
 func (sds *MockStateDiffService) processStateDiff(currentBlock *types.Block, parentRoot common.Hash, params statediff.Params) (*statediff.Payload, error) {
 	stateDiff, err := sds.Builder.BuildStateDiffObject(statediff.Args{
@@ -133,28 +144,51 @@ func (sds *MockStateDiffService) processStateDiff(currentBlock *types.Block, par
 	if err != nil {
 		return nil, err
 	}
-	payload := statediff.Payload{
-		StateObjectRlp: stateDiffRlp,
+	return sds.newPayload(stateDiffRlp, currentBlock, params)
+}
+
+func (sds *MockStateDiffService) newPayload(stateObject []byte, block *types.Block, params statediff.Params) (*statediff.Payload, error) {
+	payload := &statediff.Payload{
+		StateObjectRlp: stateObject,
 	}
 	if params.IncludeBlock {
 		blockBuff := new(bytes.Buffer)
-		if err = currentBlock.EncodeRLP(blockBuff); err != nil {
+		if err := block.EncodeRLP(blockBuff); err != nil {
 			return nil, err
 		}
 		payload.BlockRlp = blockBuff.Bytes()
 	}
 	if params.IncludeTD {
-		payload.TotalDifficulty = sds.BlockChain.GetTdByHash(currentBlock.Hash())
+		payload.TotalDifficulty = sds.BlockChain.GetTdByHash(block.Hash())
 	}
 	if params.IncludeReceipts {
 		receiptBuff := new(bytes.Buffer)
-		receipts := sds.BlockChain.GetReceiptsByHash(currentBlock.Hash())
-		if err = rlp.Encode(receiptBuff, receipts); err != nil {
+		receipts := sds.BlockChain.GetReceiptsByHash(block.Hash())
+		if err := rlp.Encode(receiptBuff, receipts); err != nil {
 			return nil, err
 		}
 		payload.ReceiptsRlp = receiptBuff.Bytes()
 	}
-	return &payload, nil
+	return payload, nil
+}
+
+// StateTrieAt mock method
+func (sds *MockStateDiffService) StateTrieAt(blockNumber uint64, params statediff.Params) (*statediff.Payload, error) {
+	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
+	log.Info(fmt.Sprintf("sending state trie at %d", blockNumber))
+	return sds.stateTrieAt(currentBlock, params)
+}
+
+func (sds *MockStateDiffService) stateTrieAt(block *types.Block, params statediff.Params) (*statediff.Payload, error) {
+	stateNodes, err := sds.Builder.BuildStateTrieObject(block)
+	if err != nil {
+		return nil, err
+	}
+	stateTrieRlp, err := rlp.EncodeToBytes(stateNodes)
+	if err != nil {
+		return nil, err
+	}
+	return sds.newPayload(stateTrieRlp, block, params)
 }
 
 // Subscribe is used by the API to subscribe to the service loop
@@ -191,57 +225,6 @@ func (sds *MockStateDiffService) Unsubscribe(id rpc.ID) error {
 	}
 	sds.Unlock()
 	return nil
-}
-
-// StateDiffAt mock method
-func (sds *MockStateDiffService) StateDiffAt(blockNumber uint64, params statediff.Params) (*statediff.Payload, error) {
-	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
-	log.Info(fmt.Sprintf("sending state diff at %d", blockNumber))
-	if blockNumber == 0 {
-		return sds.processStateDiff(currentBlock, common.Hash{}, params)
-	}
-	parentBlock := sds.BlockChain.GetBlockByHash(currentBlock.ParentHash())
-	return sds.processStateDiff(currentBlock, parentBlock.Root(), params)
-}
-
-// StateTrieAt mock method
-func (sds *MockStateDiffService) StateTrieAt(blockNumber uint64, params statediff.Params) (*statediff.Payload, error) {
-	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
-	log.Info(fmt.Sprintf("sending state trie at %d", blockNumber))
-	return sds.stateTrieAt(currentBlock, params)
-}
-
-func (sds *MockStateDiffService) stateTrieAt(block *types.Block, params statediff.Params) (*statediff.Payload, error) {
-	stateNodes, err := sds.Builder.BuildStateTrieObject(block)
-	if err != nil {
-		return nil, err
-	}
-	stateTrieRlp, err := rlp.EncodeToBytes(stateNodes)
-	if err != nil {
-		return nil, err
-	}
-	payload := statediff.Payload{
-		StateObjectRlp: stateTrieRlp,
-	}
-	if params.IncludeBlock {
-		blockBuff := new(bytes.Buffer)
-		if err = block.EncodeRLP(blockBuff); err != nil {
-			return nil, err
-		}
-		payload.BlockRlp = blockBuff.Bytes()
-	}
-	if params.IncludeTD {
-		payload.TotalDifficulty = sds.BlockChain.GetTdByHash(block.Hash())
-	}
-	if params.IncludeReceipts {
-		receiptBuff := new(bytes.Buffer)
-		receipts := sds.BlockChain.GetReceiptsByHash(block.Hash())
-		if err = rlp.Encode(receiptBuff, receipts); err != nil {
-			return nil, err
-		}
-		payload.ReceiptsRlp = receiptBuff.Bytes()
-	}
-	return &payload, nil
 }
 
 // close is used to close all listening subscriptions

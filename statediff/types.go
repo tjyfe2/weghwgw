@@ -84,17 +84,14 @@ func (sd *Payload) Encode() ([]byte, error) {
 type StateObject struct {
 	BlockNumber *big.Int    `json:"blockNumber"     gencodec:"required"`
 	BlockHash   common.Hash `json:"blockHash"       gencodec:"required"`
-	Nodes       []StateNode `json:"nodes" gencodec:"required"`
-
-	encoded []byte
-	err     error
+	Nodes       []StateNode `json:"nodes"           gencodec:"required"`
 }
 
 // StateNode holds the data for a single state diff node
 type StateNode struct {
 	NodeType     NodeType      `json:"nodeType"        gencodec:"required"`
-	Path         []byte        `json:"path"         gencodec:"required"`
-	NodeValue    []byte        `json:"value"       gencodec:"required"`
+	Path         []byte        `json:"path"            gencodec:"required"`
+	NodeValue    []byte        `json:"value"           gencodec:"required"`
 	StorageNodes []StorageNode `json:"storage"`
 	LeafKey      []byte        `json:"leafKey"`
 }
@@ -102,8 +99,8 @@ type StateNode struct {
 // StorageNode holds the data for a single storage diff node
 type StorageNode struct {
 	NodeType  NodeType `json:"nodeType"        gencodec:"required"`
-	Path      []byte   `json:"path"     gencodec:"required"`
-	NodeValue []byte   `json:"value"       gencodec:"required"`
+	Path      []byte   `json:"path"            gencodec:"required"`
+	NodeValue []byte   `json:"value"           gencodec:"required"`
 	LeafKey   []byte   `json:"leafKey"`
 }
 
@@ -127,5 +124,5 @@ const (
 	Leaf      NodeType = "Leaf"
 	Extension NodeType = "Extension"
 	Branch    NodeType = "Branch"
-	Removed   NodeType = "Removed" // used to represent nodes which have been deleted (e.g. accounts due to EIp-158)
+	Removed   NodeType = "Removed" // used to represent pathes which have been emptied
 )

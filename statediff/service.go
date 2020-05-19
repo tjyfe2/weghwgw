@@ -172,13 +172,25 @@ func (sds *Service) streamStateDiff(currentBlock *types.Block, parentRoot common
 		for id, sub := range subs {
 			select {
 			case sub.PayloadChan <- *payload:
-				log.Debug(fmt.Sprintf("sending statediff payload to subscription %s", id))
+				log.Debug(fmt.Sprintf("sending statediff payload at head height %d to subscription %s", currentBlock.Number(), id))
 			default:
 				log.Info(fmt.Sprintf("unable to send statediff payload to subscription %s; channel has no receiver", id))
 			}
 		}
 	}
 	sds.Unlock()
+}
+
+// StateDiffAt returns a state diff object payload at the specific blockheight
+// This operation cannot be performed back past the point of db pruning; it requires an archival node for historical data
+func (sds *Service) StateDiffAt(blockNumber uint64, params Params) (*Payload, error) {
+	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
+	log.Info(fmt.Sprintf("sending state diff at block %d", blockNumber))
+	if blockNumber == 0 {
+		return sds.processStateDiff(currentBlock, common.Hash{}, params)
+	}
+	parentBlock := sds.BlockChain.GetBlockByHash(currentBlock.ParentHash())
+	return sds.processStateDiff(currentBlock, parentBlock.Root(), params)
 }
 
 // processStateDiff method builds the state diff payload from the current block, parent state root, and provided params
@@ -196,28 +208,52 @@ func (sds *Service) processStateDiff(currentBlock *types.Block, parentRoot commo
 	if err != nil {
 		return nil, err
 	}
-	payload := Payload{
-		StateObjectRlp: stateDiffRlp,
+	return sds.newPayload(stateDiffRlp, currentBlock, params)
+}
+
+func (sds *Service) newPayload(stateObject []byte, block *types.Block, params Params) (*Payload, error) {
+	payload := &Payload{
+		StateObjectRlp: stateObject,
 	}
 	if params.IncludeBlock {
 		blockBuff := new(bytes.Buffer)
-		if err = currentBlock.EncodeRLP(blockBuff); err != nil {
+		if err := block.EncodeRLP(blockBuff); err != nil {
 			return nil, err
 		}
 		payload.BlockRlp = blockBuff.Bytes()
 	}
 	if params.IncludeTD {
-		payload.TotalDifficulty = sds.BlockChain.GetTdByHash(currentBlock.Hash())
+		payload.TotalDifficulty = sds.BlockChain.GetTdByHash(block.Hash())
 	}
 	if params.IncludeReceipts {
 		receiptBuff := new(bytes.Buffer)
-		receipts := sds.BlockChain.GetReceiptsByHash(currentBlock.Hash())
-		if err = rlp.Encode(receiptBuff, receipts); err != nil {
+		receipts := sds.BlockChain.GetReceiptsByHash(block.Hash())
+		if err := rlp.Encode(receiptBuff, receipts); err != nil {
 			return nil, err
 		}
 		payload.ReceiptsRlp = receiptBuff.Bytes()
 	}
-	return &payload, nil
+	return payload, nil
+}
+
+// StateTrieAt returns a state trie object payload at the specified blockheight
+// This operation cannot be performed back past the point of db pruning; it requires an archival node for historical data
+func (sds *Service) StateTrieAt(blockNumber uint64, params Params) (*Payload, error) {
+	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
+	log.Info(fmt.Sprintf("sending state trie at block %d", blockNumber))
+	return sds.processStateTrie(currentBlock, params)
+}
+
+func (sds *Service) processStateTrie(block *types.Block, params Params) (*Payload, error) {
+	stateNodes, err := sds.Builder.BuildStateTrieObject(block)
+	if err != nil {
+		return nil, err
+	}
+	stateTrieRlp, err := rlp.EncodeToBytes(stateNodes)
+	if err != nil {
+		return nil, err
+	}
+	return sds.newPayload(stateTrieRlp, block, params)
 }
 
 // Subscribe is used by the API to subscribe to the service loop
@@ -275,59 +311,6 @@ func (sds *Service) Start(*p2p.Server) error {
 	go sds.Loop(chainEventCh)
 
 	return nil
-}
-
-// StateDiffAt returns a state diff object payload at the specific blockheight
-// This operation cannot be performed back past the point of db pruning; it requires an archival node for historical data
-func (sds *Service) StateDiffAt(blockNumber uint64, params Params) (*Payload, error) {
-	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
-	log.Info(fmt.Sprintf("sending state diff at %d", blockNumber))
-	if blockNumber == 0 {
-		return sds.processStateDiff(currentBlock, common.Hash{}, params)
-	}
-	parentBlock := sds.BlockChain.GetBlockByHash(currentBlock.ParentHash())
-	return sds.processStateDiff(currentBlock, parentBlock.Root(), params)
-}
-
-// StateTrieAt returns a state trie object payload at the specified blockheight
-// This operation cannot be performed back past the point of db pruning; it requires an archival node for historical data
-func (sds *Service) StateTrieAt(blockNumber uint64, params Params) (*Payload, error) {
-	currentBlock := sds.BlockChain.GetBlockByNumber(blockNumber)
-	log.Info(fmt.Sprintf("sending state trie at %d", blockNumber))
-	return sds.stateTrieAt(currentBlock, params)
-}
-
-func (sds *Service) stateTrieAt(block *types.Block, params Params) (*Payload, error) {
-	stateNodes, err := sds.Builder.BuildStateTrieObject(block)
-	if err != nil {
-		return nil, err
-	}
-	stateTrieRlp, err := rlp.EncodeToBytes(stateNodes)
-	if err != nil {
-		return nil, err
-	}
-	payload := Payload{
-		StateObjectRlp: stateTrieRlp,
-	}
-	if params.IncludeBlock {
-		blockBuff := new(bytes.Buffer)
-		if err = block.EncodeRLP(blockBuff); err != nil {
-			return nil, err
-		}
-		payload.BlockRlp = blockBuff.Bytes()
-	}
-	if params.IncludeTD {
-		payload.TotalDifficulty = sds.BlockChain.GetTdByHash(block.Hash())
-	}
-	if params.IncludeReceipts {
-		receiptBuff := new(bytes.Buffer)
-		receipts := sds.BlockChain.GetReceiptsByHash(block.Hash())
-		if err = rlp.Encode(receiptBuff, receipts); err != nil {
-			return nil, err
-		}
-		payload.ReceiptsRlp = receiptBuff.Bytes()
-	}
-	return &payload, nil
 }
 
 // Stop is used to close down the service
