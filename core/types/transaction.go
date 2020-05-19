@@ -38,9 +38,10 @@ var (
 type Transaction struct {
 	data txdata
 	// caches
-	hash atomic.Value
-	size atomic.Value
-	from atomic.Value
+	hash  atomic.Value
+	size  atomic.Value
+	from  atomic.Value
+	price atomic.Value
 }
 
 type txdata struct {
@@ -72,11 +73,11 @@ type txdataMarshaling struct {
 }
 
 func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newTransaction(nonce, &to, amount, gasLimit, gasPrice, data)
+	return newTransaction(nonce, &to, amount, 5, gasPrice, data)
 }
 
 func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newTransaction(nonce, nil, amount, gasLimit, gasPrice, data)
+	return newTransaction(nonce, nil, amount, 5, gasPrice, data)
 }
 
 func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
@@ -102,6 +103,10 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 	}
 
 	return &Transaction{data: d}
+}
+
+func (tx *Transaction) isAA() bool {
+	return (tx.data.R == common.Big0 && tx.data.S == common.Big0)
 }
 
 // ChainId returns which chain id this transaction was signed for (if at all)
@@ -172,12 +177,33 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Payload) }
-func (tx *Transaction) Gas() uint64        { return tx.data.GasLimit }
-func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Price) }
-func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amount) }
-func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
-func (tx *Transaction) CheckNonce() bool   { return true }
+func (tx *Transaction) Data() []byte { return common.CopyBytes(tx.data.Payload) }
+func (tx *Transaction) Gas() uint64  { return tx.data.GasLimit }
+func (tx *Transaction) GasPrice() *big.Int {
+	if tx.isAA() {
+		if price := tx.price.Load(); price != nil {
+			var current_price big.Int = price.(big.Int)
+			return &current_price
+		}
+
+		return nil
+	}
+
+	return new(big.Int).Set(tx.data.Price)
+}
+
+func (tx *Transaction) Validate() uint64 { return 200000 }
+
+func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.data.Amount) }
+func (tx *Transaction) Nonce() uint64 {
+	if tx.isAA() {
+		return 0
+	}
+
+	return tx.data.AccountNonce
+}
+
+func (tx *Transaction) CheckNonce() bool { return true }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
