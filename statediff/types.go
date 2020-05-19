@@ -56,7 +56,7 @@ type Payload struct {
 	BlockRlp        []byte   `json:"blockRlp"`
 	TotalDifficulty *big.Int `json:"totalDifficulty"`
 	ReceiptsRlp     []byte   `json:"receiptsRlp"`
-	StateObjectRlp  []byte   `json:"stateDiff"    gencodec:"required"`
+	StateObjectRlp  []byte   `json:"stateObjectRlp"    gencodec:"required"`
 
 	encoded []byte
 	err     error
@@ -84,7 +84,7 @@ func (sd *Payload) Encode() ([]byte, error) {
 type StateObject struct {
 	BlockNumber *big.Int    `json:"blockNumber"     gencodec:"required"`
 	BlockHash   common.Hash `json:"blockHash"       gencodec:"required"`
-	Nodes       []StateNode `json:"Nodes" gencodec:"required"`
+	Nodes       []StateNode `json:"nodes" gencodec:"required"`
 
 	encoded []byte
 	err     error
@@ -95,7 +95,7 @@ type StateNode struct {
 	NodeType     NodeType      `json:"nodeType"        gencodec:"required"`
 	Path         []byte        `json:"path"         gencodec:"required"`
 	NodeValue    []byte        `json:"value"       gencodec:"required"`
-	StorageDiffs []StorageNode `json:"storage"`
+	StorageNodes []StorageNode `json:"storage"`
 	LeafKey      []byte        `json:"leafKey"`
 }
 

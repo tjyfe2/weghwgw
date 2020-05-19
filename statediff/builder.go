@@ -108,7 +108,7 @@ func (sdb *builder) buildStateTrie(it trie.NodeIterator) ([]StateNode, error) {
 			valueNodePath := append(nodePath, partialPath...)
 			encodedPath := trie.HexToCompact(valueNodePath)
 			leafKey := encodedPath[1:]
-			storageDiffs, err := sdb.buildStorageNodesEventual(account.Root, nil, true)
+			storageNodes, err := sdb.buildStorageNodesEventual(account.Root, nil, true)
 			if err != nil {
 				return nil, fmt.Errorf("failed building eventual storage diffs for account %+v\r\nerror: %v", account, err)
 			}
@@ -117,7 +117,7 @@ func (sdb *builder) buildStateTrie(it trie.NodeIterator) ([]StateNode, error) {
 				Path:         nodePath,
 				LeafKey:      leafKey,
 				NodeValue:    node,
-				StorageDiffs: storageDiffs,
+				StorageNodes: storageNodes,
 			})
 		case Extension, Branch:
 			stateNodes = append(stateNodes, StateNode{
@@ -464,7 +464,7 @@ func (sdb *builder) buildAccountUpdates(creations, deletions AccountMap, updated
 			Path:         createdAcc.Path,
 			NodeValue:    createdAcc.NodeValue,
 			LeafKey:      createdAcc.LeafKey,
-			StorageDiffs: storageDiffs,
+			StorageNodes: storageDiffs,
 		})
 		delete(creations, key)
 		delete(deletions, key)
@@ -487,7 +487,7 @@ func (sdb *builder) buildAccountCreations(accounts AccountMap, watchedStorageKey
 			Path:         val.Path,
 			LeafKey:      val.LeafKey,
 			NodeValue:    val.NodeValue,
-			StorageDiffs: storageDiffs,
+			StorageNodes: storageDiffs,
 		})
 	}
 
