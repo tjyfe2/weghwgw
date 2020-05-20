@@ -105,7 +105,7 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 	return &Transaction{data: d}
 }
 
-func (tx *Transaction) isAA() bool {
+func (tx *Transaction) IsAA() bool {
 	return (tx.data.R == common.Big0 && tx.data.S == common.Big0)
 }
 
@@ -180,7 +180,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 func (tx *Transaction) Data() []byte { return common.CopyBytes(tx.data.Payload) }
 func (tx *Transaction) Gas() uint64  { return tx.data.GasLimit }
 func (tx *Transaction) GasPrice() *big.Int {
-	if tx.isAA() {
+	if tx.IsAA() {
 		if price := tx.price.Load(); price != nil {
 			var current_price big.Int = price.(big.Int)
 			return &current_price
@@ -192,11 +192,14 @@ func (tx *Transaction) GasPrice() *big.Int {
 	return new(big.Int).Set(tx.data.Price)
 }
 
-func (tx *Transaction) Validate() uint64 { return 200000 }
+func (tx *Transaction) Validate() {
+	tx.price.Store(big.NewInt(1200))
+	// return error here
+}
 
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.data.Amount) }
 func (tx *Transaction) Nonce() uint64 {
-	if tx.isAA() {
+	if tx.IsAA() {
 		return 0
 	}
 

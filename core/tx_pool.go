@@ -56,6 +56,9 @@ var (
 	// within the pool.
 	ErrAlreadyKnown = errors.New("already known")
 
+	// Queue for AA transactions is already filled
+	ErrAACapacity = errors.New("aa txs at capacity")
+
 	// ErrInvalidSender is returned if the transaction contains an invalid signature.
 	ErrInvalidSender = errors.New("invalid sender")
 
@@ -527,11 +530,22 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentMaxGas < tx.Gas() {
 		return ErrGasLimit
 	}
-	// Make sure the transaction is signed properly
-	from, err := types.Sender(pool.signer, tx)
-	if err != nil {
-		return ErrInvalidSender
+
+	var from common.Address
+
+	if tx.IsAA() {
+		tx.Validate()
+		from = *tx.To()
+		// manage error logic here
+	} else {
+		// Make sure the transaction is signed properly
+		var err error
+		from, err = types.Sender(pool.signer, tx)
+		if err != nil {
+			return ErrInvalidSender
+		}
 	}
+
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
 	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
@@ -572,6 +586,14 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		knownTxMeter.Mark(1)
 		return false, ErrAlreadyKnown
 	}
+
+	if tx.IsAA() {
+		if pool.pending[*tx.To()] != nil {
+			return false, ErrAACapacity
+		}
+
+	}
+
 	// If the transaction fails basic validation, discard it
 	if err := pool.validateTx(tx, local); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
@@ -643,13 +665,16 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) (bool, error) {
 	// Try to insert the transaction into the future queue
 	from, _ := types.Sender(pool.signer, tx) // already validated
+
 	if pool.queue[from] == nil {
-		pool.queue[from] = newTxList(false, false)
+		pool.queue[from] = newTxList(false, tx.IsAA())
 	}
+
+	// AA transactions all have the same nonce, so to replace its queue position
+	// it needs to meet the price bump
 	inserted, old := pool.queue[from].Add(tx, pool.config.PriceBump)
 	if !inserted {
 		// An older transaction was better, discard this
-		queuedDiscardMeter.Mark(1)
 		return false, ErrReplaceUnderpriced
 	}
 	// Discard any previous transaction and mark this
@@ -687,7 +712,7 @@ func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
 func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.Transaction) bool {
 	// Try to insert the transaction into the pending queue
 	if pool.pending[addr] == nil {
-		pool.pending[addr] = newTxList(true, false)
+		pool.pending[addr] = newTxList(true, tx.IsAA())
 	}
 	list := pool.pending[addr]
 
@@ -1060,7 +1085,10 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	// Update all accounts to the latest known pending nonce
 	for addr, list := range pool.pending {
 		txs := list.Flatten() // Heavy but will be cached and is needed by the miner anyway
-		pool.pendingNonces.set(addr, txs[len(txs)-1].Nonce()+1)
+
+		if !list.IsAA {
+			pool.pendingNonces.set(addr, txs[len(txs)-1].Nonce()+1)
+		}
 	}
 	pool.mu.Unlock()
 
@@ -1078,7 +1106,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 // of the transaction pool is valid with regard to the chain state.
 func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// If we're reorging an old state, reinject all dropped transactions
-	var reinject types.Transactions
+	var reinject, included types.Transactions
 
 	if oldHead != nil && oldHead.Hash() != newHead.ParentHash {
 		// If the reorg is too deep, avoid doing it (will happen during fast sync)
@@ -1089,7 +1117,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 			log.Debug("Skipping deep transaction reorg", "depth", depth)
 		} else {
 			// Reorg seems shallow enough to pull in all transactions into memory
-			var discarded, included types.Transactions
+			var discarded types.Transactions
 			var (
 				rem = pool.chain.GetBlock(oldHead.Hash(), oldHead.Number.Uint64())
 				add = pool.chain.GetBlock(newHead.Hash(), newHead.Number.Uint64())
@@ -1139,6 +1167,28 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 			reinject = types.TxDifference(discarded, included)
 		}
 	}
+
+	// for AA we need to re-validate accounts that were included
+	// split into separate function
+	for _, tx := range included {
+		var account = tx.To()
+		if account != nil && tx.IsAA() {
+			if pool.Has(tx.Hash()) {
+				pool.removeTx(tx.Hash(), true)
+			} else {
+				if pending := pool.pending[*account]; pending != nil {
+					pending_tx := pending.txs.Flatten()[0]
+					pending_tx.Validate()
+				}
+
+				if queued := pool.queue[*account]; queued != nil {
+					queued_tx := queued.txs.Flatten()[0]
+					queued_tx.Validate()
+				}
+			}
+		}
+	}
+
 	// Initialize the internal state to the current head
 	if newHead == nil {
 		newHead = pool.chain.CurrentBlock().Header() // Special case during testing

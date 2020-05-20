@@ -225,17 +225,17 @@ type txList struct {
 
 	costcap *big.Int // Price of the highest costing transaction (reset only if exceeds balance)
 	gascap  uint64   // Gas limit of the highest spending transaction (reset only if exceeds block limit)
-	isAA    bool
+	IsAA    bool
 }
 
 // newTxList create a new transaction list for maintaining nonce-indexable fast,
 // gapped, sortable transaction lists.
-func newTxList(strict bool, isAA bool) *txList {
+func newTxList(strict bool, IsAA bool) *txList {
 	return &txList{
 		strict:  strict,
 		txs:     newTxSortedMap(),
 		costcap: new(big.Int),
-		isAA:    isAA,
+		IsAA:    IsAA,
 	}
 }
 
