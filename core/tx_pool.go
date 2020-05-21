@@ -592,10 +592,12 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	}
 
 	if tx.IsAA() {
-		current_pending = pool.pending[*tx.To()]
-		current_queue = pool.queue[*tx.To()]
+		current_pending := pool.pending[*tx.To()]
+		current_queue := pool.queue[*tx.To()]
 
-		if current_pending != nil && current_queue != nil {
+		// If pending or queue have a transaction, then we are at capacity
+		// Expand soon to have one transaction waiting in the queue
+		if current_pending != nil || current_queue != nil {
 			return false, ErrAACapacity
 		}
 
@@ -1187,13 +1189,15 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 				if pending := pool.pending[*account]; pending != nil {
 					pending_tx := pending.txs.Flatten()[0]
 					pool.removeTx(pending_tx.Hash(), true)
-					pool.add(pending_tx)
+					// ignore locals for now
+					pool.add(pending_tx, false)
 				}
 
 				if queued := pool.queue[*account]; queued != nil {
 					queued_tx := queued.txs.Flatten()[0]
-					pool.removeTx(queued_tx.Hash())
-					pool.add(queued_tx)
+					pool.removeTx(queued_tx.Hash(), true)
+					// ignore locals for now
+					pool.add(queued_tx, false)
 				}
 			}
 		}
