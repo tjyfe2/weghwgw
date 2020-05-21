@@ -38,6 +38,9 @@ type Config struct {
 	EVMInterpreter   string // External EVM interpreter options
 
 	ExtraEips []int // Additional EIPS that are to be enabled
+
+	// paygasMode sets the behavior of the PAYGAS opcode.
+	PaygasMode PaygasMode
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
@@ -82,6 +85,8 @@ type keccakState interface {
 type EVMInterpreter struct {
 	evm *EVM
 	cfg Config
+
+	paygasMode PaygasMode
 
 	intPool *intPool
 
@@ -128,6 +133,7 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	}
 
 	return &EVMInterpreter{
+		paygasMode: cfg.PaygasMode,
 		evm: evm,
 		cfg: cfg,
 	}

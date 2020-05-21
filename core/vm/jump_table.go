@@ -63,6 +63,17 @@ var (
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]operation
 
+type PaygasMode = uint
+
+const (
+	// Calling the PAYGAS opcode does nothing.
+	PaygasNoOp PaygasMode = iota
+	// Execution terminates as soon as PAYGAS is called.
+	PaygasHalt
+	// Execution continues after PAYGAS is called.
+	PaygasContinue
+)
+
 func newAccountAbstractionInstructionSet() JumpTable {
 	instructionSet := newIstanbulInstructionSet()
 
