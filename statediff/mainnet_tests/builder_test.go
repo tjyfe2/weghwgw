@@ -41,13 +41,11 @@ import (
 )
 
 var (
-	err                                                        error
 	db                                                         ethdb.Database
 	genesisBlock, block0, block1, block2, block3               *types.Block
 	block1CoinbaseAddr, block2CoinbaseAddr, block3CoinbaseAddr common.Address
 	block1CoinbaseHash, block2CoinbaseHash, block3CoinbaseHash common.Hash
 	builder                                                    statediff.Builder
-	emptyAccounts                                              = make([]statediff.StateNode, 0)
 	emptyStorage                                               = make([]statediff.StorageNode, 0)
 
 	// block 1 data

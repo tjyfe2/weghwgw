@@ -2362,12 +2362,3 @@ func TestDeleteCreateRevert(t *testing.T) {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 }
-
-func containsRootHash(collection []common.Hash, hash common.Hash) bool {
-	for _, n := range collection {
-		if n == hash {
-			return true
-		}
-	}
-	return false
-}
