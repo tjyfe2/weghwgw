@@ -133,7 +133,7 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 	}
 
 	if tx.IsAA() {
-		return common.HexToAddress("0x"), nil
+		return *tx.To(), nil
 	}
 
 	V := new(big.Int).Sub(tx.data.V, s.chainIdMul)

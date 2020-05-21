@@ -59,6 +59,9 @@ var (
 	// Queue for AA transactions is already filled
 	ErrAACapacity = errors.New("aa txs at capacity")
 
+	// When aa validation fails
+	ErrInvalidAA = errors.New("aa tx invalidated")
+
 	// ErrInvalidSender is returned if the transaction contains an invalid signature.
 	ErrInvalidSender = errors.New("invalid sender")
 
@@ -531,18 +534,16 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrGasLimit
 	}
 
-	var from common.Address
+	// Make sure the transaction is signed properly
+	from, err := types.Sender(pool.signer, tx)
+	if err != nil {
+		return ErrInvalidSender
+	}
 
 	if tx.IsAA() {
-		tx.Validate()
-		from = *tx.To()
-		// manage error logic here
-	} else {
-		// Make sure the transaction is signed properly
-		var err error
-		from, err = types.Sender(pool.signer, tx)
+		_, err := tx.Validate()
 		if err != nil {
-			return ErrInvalidSender
+			return ErrInvalidAA
 		}
 	}
 
@@ -551,15 +552,18 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrUnderpriced
 	}
+
 	// Ensure the transaction adheres to nonce ordering
-	if pool.currentState.GetNonce(from) > tx.Nonce() {
+	if !tx.IsAA() && (pool.currentState.GetNonce(from) > tx.Nonce()) {
 		return ErrNonceTooLow
 	}
+
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 		return ErrInsufficientFunds
 	}
+
 	// Ensure the transaction has more gas than the basic tx fee.
 	intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true, pool.istanbul)
 	if err != nil {

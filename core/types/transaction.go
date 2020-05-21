@@ -192,9 +192,11 @@ func (tx *Transaction) GasPrice() *big.Int {
 	return new(big.Int).Set(tx.data.Price)
 }
 
-func (tx *Transaction) Validate() {
+func (tx *Transaction) Validate() (big.Int, error) {
+	var limit = big.NewInt(1200)
 	tx.price.Store(big.NewInt(1200))
 	// return error here
+	return *limit, nil
 }
 
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.data.Amount) }
@@ -276,6 +278,10 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 
 // Cost returns amount + gasprice * gaslimit.
 func (tx *Transaction) Cost() *big.Int {
+	if tx.IsAA() {
+		return new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.data.GasLimit))
+	}
+
 	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
 	total.Add(total, tx.data.Amount)
 	return total
