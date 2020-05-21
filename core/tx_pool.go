@@ -592,7 +592,10 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	}
 
 	if tx.IsAA() {
-		if pool.pending[*tx.To()] != nil {
+		current_pending = pool.pending[*tx.To()]
+		current_queue = pool.queue[*tx.To()]
+
+		if current_pending != nil && current_queue != nil {
 			return false, ErrAACapacity
 		}
 
@@ -1174,6 +1177,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 
 	// for AA we need to re-validate accounts that were included
 	// split into separate function
+	// This introduces some basic race conditions, so this needs to be refactored
 	for _, tx := range included {
 		var account = tx.To()
 		if account != nil && tx.IsAA() {
@@ -1182,12 +1186,14 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 			} else {
 				if pending := pool.pending[*account]; pending != nil {
 					pending_tx := pending.txs.Flatten()[0]
-					pending_tx.Validate()
+					pool.removeTx(pending_tx.Hash(), true)
+					pool.add(pending_tx)
 				}
 
 				if queued := pool.queue[*account]; queued != nil {
 					queued_tx := queued.txs.Flatten()[0]
-					queued_tx.Validate()
+					pool.removeTx(queued_tx.Hash())
+					pool.add(queued_tx)
 				}
 			}
 		}
