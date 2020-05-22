@@ -125,15 +125,16 @@ func (s EIP155Signer) Equal(s2 Signer) bool {
 var big8 = big.NewInt(8)
 
 func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
+	if tx.IsAA() {
+		return *tx.To(), nil
+	}
+
 	if !tx.Protected() {
 		return HomesteadSigner{}.Sender(tx)
 	}
+
 	if tx.ChainId().Cmp(s.chainId) != 0 {
 		return common.Address{}, ErrInvalidChainId
-	}
-
-	if tx.IsAA() {
-		return *tx.To(), nil
 	}
 
 	V := new(big.Int).Sub(tx.data.V, s.chainIdMul)

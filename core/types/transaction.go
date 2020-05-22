@@ -73,11 +73,11 @@ type txdataMarshaling struct {
 }
 
 func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newTransaction(nonce, &to, amount, 5, gasPrice, data)
+	return newTransaction(nonce, &to, amount, gasLimit, gasPrice, data)
 }
 
 func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newTransaction(nonce, nil, amount, 5, gasPrice, data)
+	return newTransaction(nonce, nil, amount, gasLimit, gasPrice, data)
 }
 
 func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
@@ -105,8 +105,33 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 	return &Transaction{data: d}
 }
 
+func NewAATransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
+	if len(data) > 0 {
+		data = common.CopyBytes(data)
+	}
+	d := txdata{
+		AccountNonce: nonce,
+		Recipient:    to,
+		Payload:      data,
+		Amount:       new(big.Int),
+		GasLimit:     gasLimit,
+		Price:        new(big.Int),
+		V:            big.NewInt(128 + 35),
+		R:            new(big.Int),
+		S:            new(big.Int),
+	}
+	if amount != nil {
+		d.Amount.Set(amount)
+	}
+	if gasPrice != nil {
+		d.Price.Set(gasPrice)
+	}
+
+	return &Transaction{data: d}
+}
+
 func (tx *Transaction) IsAA() bool {
-	return (tx.data.R == common.Big0 && tx.data.S == common.Big0)
+	return (tx.data.R.Cmp(common.Big0) == 0 && tx.data.S.Cmp(common.Big0) == 0)
 }
 
 // ChainId returns which chain id this transaction was signed for (if at all)
@@ -193,8 +218,8 @@ func (tx *Transaction) GasPrice() *big.Int {
 }
 
 func (tx *Transaction) Validate() (big.Int, error) {
-	var limit = big.NewInt(1200)
-	tx.price.Store(big.NewInt(1200))
+	var limit = big.NewInt(40000)
+	tx.price.Store(*big.NewInt(10))
 	// return error here
 	return *limit, nil
 }
@@ -279,7 +304,8 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 // Cost returns amount + gasprice * gaslimit.
 func (tx *Transaction) Cost() *big.Int {
 	if tx.IsAA() {
-		return new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.data.GasLimit))
+		var price = tx.GasPrice()
+		return new(big.Int).Mul(price, new(big.Int).SetUint64(tx.data.GasLimit))
 	}
 
 	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
