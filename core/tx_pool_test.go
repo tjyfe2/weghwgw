@@ -72,6 +72,10 @@ func transaction(nonce uint64, gaslimit uint64, key *ecdsa.PrivateKey) *types.Tr
 	return pricedTransaction(nonce, gaslimit, big.NewInt(1), key)
 }
 
+func aaTransaction(gaslimit uint64, to common.Address) *types.Transaction {
+	return types.NewAATransaction(0, &to, big.NewInt(0), gaslimit, big.NewInt(0), nil)
+}
+
 func pricedTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
 	tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(100), gaslimit, gasprice, nil), types.HomesteadSigner{}, key)
 	return tx
@@ -320,6 +324,67 @@ func TestTransactionQueue2(t *testing.T) {
 	}
 	if pool.queue[from].Len() != 2 {
 		t.Error("expected len(queue) == 2, got", pool.queue[from].Len())
+	}
+}
+
+func TestAAQueue2(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupTxPool()
+	defer pool.Stop()
+	key1, _ := crypto.GenerateKey()
+	address1 := crypto.PubkeyToAddress(key1.PublicKey)
+
+	tx1 := aaTransaction(100, address1)
+	tx2 := aaTransaction(100, address1)
+	tx3 := aaTransaction(100, address1)
+
+	tx1.Validate()
+	tx2.Validate()
+	tx3.Validate()
+
+	pool.currentState.AddBalance(address1, big.NewInt(3000))
+	pool.reset(nil, nil)
+
+	pool.enqueueTx(tx1.Hash(), tx1)
+	pool.enqueueTx(tx2.Hash(), tx2)
+	pool.enqueueTx(tx3.Hash(), tx3)
+
+	if pool.queue[address1].Len() != 1 {
+		t.Error("expected len(queue) == 1, got", pool.queue[address1].Len())
+	}
+}
+
+func TestAAPending2(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupTxPool()
+	defer pool.Stop()
+	key1, _ := crypto.GenerateKey()
+	address1 := crypto.PubkeyToAddress(key1.PublicKey)
+
+	tx1 := aaTransaction(100, address1)
+	tx2 := aaTransaction(100, address1)
+	tx3 := aaTransaction(100, address1)
+
+	tx1.Validate()
+	tx2.Validate()
+	tx3.Validate()
+
+	pool.currentState.AddBalance(address1, big.NewInt(3000))
+	pool.reset(nil, nil)
+
+	pool.enqueueTx(tx1.Hash(), tx1)
+	pool.enqueueTx(tx2.Hash(), tx2)
+	pool.enqueueTx(tx3.Hash(), tx3)
+	pool.promoteExecutables([]common.Address{address1})
+
+	if pool.queue[address1] != nil {
+		t.Error("expected len(queue) == 0, got", pool.queue[address1].Len())
+	}
+
+	if len(pool.pending) != 1 {
+		t.Error("expected len(pending) == 1, got", len(pool.pending))
 	}
 }
 
