@@ -224,6 +224,9 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (commo
 		return common.Address{}, ErrInvalidSig
 	}
 	V := byte(Vb.Uint64() - 27)
+	if R.Sign() == 0 && S.Sign() == 0 && V == 0 {
+		return common.NewEntryPointAddress(), nil
+	}
 	if !crypto.ValidateSignatureValues(V, R, S, homestead) {
 		return common.Address{}, ErrInvalidSig
 	}
