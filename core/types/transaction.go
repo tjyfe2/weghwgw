@@ -230,6 +230,7 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 
 	var err error
 	msg.from, err = Sender(s, tx)
+	msg.isAA = msg.from.IsEntryPoint()
 	return msg, err
 }
 
@@ -394,6 +395,7 @@ type Message struct {
 	gasPrice   *big.Int
 	data       []byte
 	checkNonce bool
+	isAA       bool
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
@@ -417,3 +419,4 @@ func (m Message) Gas() uint64          { return m.gasLimit }
 func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
 func (m Message) CheckNonce() bool     { return m.checkNonce }
+func (m Message) IsAA() bool           { return m.isAA }
