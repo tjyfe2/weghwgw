@@ -25,6 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var aaPrefix = [...]byte{
+	0x33, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0x14, 0x60, 0x24, 0x57, 0x36, 0x60, 0x1f, 0x57, 0x00, 0x5b, 0x60, 0x00, 0x80, 0xfd, 0x5b,
+}
+
 /*
 The State Transitioning Model
 
@@ -66,6 +71,8 @@ type Message interface {
 	Nonce() uint64
 	CheckNonce() bool
 	Data() []byte
+
+	IsAA() bool
 }
 
 // ExecutionResult includes all output after executing given evm
@@ -189,7 +196,7 @@ func (st *StateTransition) buyGas() error {
 
 func (st *StateTransition) preCheck() error {
 	// Make sure this transaction's nonce is correct.
-	if st.msg.CheckNonce() {
+	if st.msg.CheckNonce() && !st.msg.IsAA() {
 		nonce := st.state.GetNonce(st.msg.From())
 		if nonce < st.msg.Nonce() {
 			return ErrNonceTooHigh
@@ -223,6 +230,18 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// 4. the purchased gas is enough to cover intrinsic usage
 	// 5. there is no overflow when calculating intrinsic gas
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
+
+	if st.msg.IsAA() {
+		code := st.evm.StateDB.GetCode(st.to())
+		if code == nil || len(code) < len(aaPrefix) {
+			return nil, ErrInvalidAAPrefix
+		}
+		for i := range aaPrefix {
+			if aaPrefix[i] != code[i] {
+				return nil, ErrInvalidAAPrefix
+			}
+		}
+	}
 
 	// Check clauses 1-3, buy gas if everything is correct
 	if err := st.preCheck(); err != nil {

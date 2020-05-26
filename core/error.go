@@ -63,4 +63,6 @@ var (
 	// ErrIntrinsicGas is returned if the transaction is specified to use less gas
 	// than required to start the invocation.
 	ErrIntrinsicGas = errors.New("intrinsic gas too low")
+
+	ErrInvalidAAPrefix = errors.New("invalid account abstraction prefix")
 )
