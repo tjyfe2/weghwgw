@@ -903,7 +903,12 @@ func makeLog(size int) executionFunc {
 }
 
 func opPaygas(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	interpreter.evm.snapshots[len(interpreter.evm.snapshots)-1] = interpreter.evm.StateDB.Snapshot()
+
+	// TODO: Store the popped value
+	if interpreter.paygasMode != PaygasNoOp {
+		interpreter.evm.snapshots[len(interpreter.evm.snapshots)-1] = interpreter.evm.StateDB.Snapshot()
+		interpreter.paygasMode = PaygasNoOp
+	}
 	interpreter.intPool.put(callContext.stack.pop())
 	return nil, nil
 }
