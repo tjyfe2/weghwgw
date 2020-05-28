@@ -327,6 +327,47 @@ func TestTransactionQueue2(t *testing.T) {
 	}
 }
 
+func TestAAQueue(t *testing.T) {
+	// should test that more expensive takes place in queue
+	// should make sure only one goes to pending
+	// need to test validation error
+	// need to test intrinsic gas
+	// need to test not enough gas
+	t.Parallel()
+
+	pool, _ := setupTxPool()
+	defer pool.Stop()
+	key1, _ := crypto.GenerateKey()
+	address1 := crypto.PubkeyToAddress(key1.PublicKey)
+
+	tx1 := aaTransaction(22000, address1)
+
+	pool.currentState.AddBalance(address1, big.NewInt(1000000))
+	<-pool.requestReset(nil, nil)
+
+	pool.add(tx1, false)
+
+	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, address1))
+	if len(pool.pending) != 1 {
+		t.Error("expected valid txs to be 1 is", len(pool.pending))
+	}
+
+	tx2 := aaTransaction(22000, address1)
+	pool.add(tx2, false)
+
+	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, address1))
+	if len(pool.queue) > 0 {
+		t.Error("expected transaction queue to be empty. is", len(pool.queue))
+	}
+	if len(pool.pending) > 1 {
+		t.Error("expected transaction queue to be empty. is", len(pool.queue))
+	}
+}
+
+func TestAAPending(t *testing.T) {
+
+}
+
 func TestAAQueue2(t *testing.T) {
 	t.Parallel()
 
