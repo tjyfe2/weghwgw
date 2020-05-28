@@ -569,6 +569,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if err != nil {
 		return err
 	}
+
 	if tx.Gas() < intrGas {
 		return ErrIntrinsicGas
 	}
@@ -597,7 +598,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 
 		// If pending or queue have a transaction, then we are at capacity
 		// Expand soon to have one transaction waiting in the queue
-		if current_pending != nil || current_queue != nil {
+		if current_pending != nil && current_queue != nil {
 			return false, ErrAACapacity
 		}
 
