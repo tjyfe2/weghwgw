@@ -19,6 +19,8 @@ package types
 import (
 	"container/heap"
 	"errors"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"io"
 	"math/big"
 	"sync/atomic"
@@ -32,15 +34,17 @@ import (
 //go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
 
 var (
-	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
+	ErrInvalidSig          = errors.New("invalid transaction v, r, s values")
+	ErrIncorrectPaygasMode = errors.New("incorrect PaygasMode for EVM")
 )
 
 type Transaction struct {
 	data txdata
 	// caches
-	hash atomic.Value
-	size atomic.Value
-	from atomic.Value
+	hash  atomic.Value
+	size  atomic.Value
+	from  atomic.Value
+	price atomic.Value
 }
 
 type txdata struct {
@@ -262,6 +266,28 @@ func (tx *Transaction) Cost() *big.Int {
 // The return values should not be modified by the caller.
 func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
 	return tx.data.V, tx.data.R, tx.data.S
+}
+
+func (tx *Transaction) Validate(s Signer, evm *vm.EVM) error {
+	if evm.PaygasMode() != vm.PaygasHalt {
+		return ErrIncorrectPaygasMode
+	}
+	msg, err := tx.AsMessage(s)
+	if err != nil {
+		return err
+	}
+	gp := new(core.GasPool).AddGas(msg.gasLimit)
+	result, err := core.ApplyMessage(evm, msg, gp)
+	if err != nil {
+		return err
+	}
+	if result.Err != nil {
+		return result.Err
+	}
+	price := new(big.Int)
+	price.SetBytes(result.ReturnData)
+	tx.price.Store(price)
+	return nil
 }
 
 // Transactions is a Transaction slice type for basic sorting.
