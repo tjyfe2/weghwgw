@@ -212,6 +212,11 @@ func (tx *Transaction) Size() common.StorageSize {
 	return common.StorageSize(c)
 }
 
+// IsAA returns the result of a basic AA signature check.
+func (tx *Transaction) IsAA() bool {
+	return tx.data.R.Sign() == 0 && tx.data.S.Sign() == 0
+}
+
 // AsMessage returns the transaction as a core.Message.
 //
 // AsMessage requires a signer to derive the sender.
