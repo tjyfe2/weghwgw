@@ -73,6 +73,7 @@ type Message interface {
 	Data() []byte
 
 	IsAA() bool
+	Sponsor() common.Address
 }
 
 // ExecutionResult includes all output after executing given evm
@@ -181,7 +182,7 @@ func (st *StateTransition) to() common.Address {
 
 func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
-	if st.state.GetBalance(st.msg.From()).Cmp(mgval) < 0 {
+	if st.state.GetBalance(st.msg.Sponsor()).Cmp(mgval) < 0 {
 		return ErrInsufficientFunds
 	}
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
@@ -190,7 +191,7 @@ func (st *StateTransition) buyGas() error {
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	st.state.SubBalance(st.msg.From(), mgval)
+	st.state.SubBalance(st.msg.Sponsor(), mgval)
 	return nil
 }
 
@@ -264,7 +265,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.gas -= gas
 
 	// Check clause 6
-	if msg.Value().Sign() > 0 && !st.evm.CanTransfer(st.state, msg.From(), msg.Value()) {
+	if msg.IsAA() && msg.Value().Sign() != 0 {
+		return nil, ErrInsufficientFundsForTransfer
+	} else if !msg.IsAA() && msg.Value().Sign() > 0 && !st.evm.CanTransfer(st.state, msg.From(), msg.Value()) {
 		return nil, ErrInsufficientFundsForTransfer
 	}
 	var (
@@ -274,8 +277,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if contractCreation {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
-		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		if !msg.IsAA() {
+			// Increment the nonce for the next transaction
+			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		}
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
 	st.refundGas()
@@ -298,7 +303,7 @@ func (st *StateTransition) refundGas() {
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-	st.state.AddBalance(st.msg.From(), remaining)
+	st.state.AddBalance(st.msg.Sponsor(), remaining)
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.

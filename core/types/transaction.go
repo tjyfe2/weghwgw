@@ -430,3 +430,10 @@ func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
 func (m Message) CheckNonce() bool     { return m.checkNonce }
 func (m Message) IsAA() bool           { return m.isAA }
+func (m Message) Sponsor() common.Address {
+	if !m.isAA {
+		return m.from
+	} else {
+		return *m.to
+	}
+}
