@@ -28,7 +28,7 @@ var (
 	ErrIncorrectPaygasMode = errors.New("incorrect PaygasMode for EVM")
 )
 
-func Validate(tx *types.Transaction, s types.Signer, evm *vm.EVM) error {
+func Validate(tx *types.Transaction, s types.Signer, evm *vm.EVM, gasLimit uint64) error {
 	if evm.PaygasMode() != vm.PaygasHalt {
 		return ErrIncorrectPaygasMode
 	}
@@ -36,7 +36,10 @@ func Validate(tx *types.Transaction, s types.Signer, evm *vm.EVM) error {
 	if err != nil {
 		return err
 	}
-	gp := new(GasPool).AddGas(msg.Gas())
+	if gasLimit > msg.Gas() {
+		gasLimit = msg.Gas()
+	}
+	gp := new(GasPool).AddGas(gasLimit)
 	result, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
 		return err

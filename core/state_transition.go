@@ -238,7 +238,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, ErrInvalidAAPrefix
 		}
 		for i := range aaPrefix {
-			if aaPrefix[i] != code[i] {
+			if code[i] != aaPrefix[i] {
 				return nil, ErrInvalidAAPrefix
 			}
 		}
