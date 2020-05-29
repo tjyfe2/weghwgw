@@ -384,7 +384,7 @@ func TestAAQueue2(t *testing.T) {
 	tx2.Validate()
 	tx3.Validate()
 
-	pool.currentState.AddBalance(address1, big.NewInt(3000))
+	pool.currentState.AddBalance(address1, big.NewInt(1000000))
 	pool.reset(nil, nil)
 
 	pool.enqueueTx(tx1.Hash(), tx1)
@@ -394,9 +394,14 @@ func TestAAQueue2(t *testing.T) {
 	if pool.queue[address1].Len() != 1 {
 		t.Error("expected len(queue) == 1, got", pool.queue[address1].Len())
 	}
+
+	// Need to add tests here to make sure higher gas aa transaction replace low priced
+	// if pool.queue[address1].txs.Flatten()[0].Hash() != tx1.Hash() {
+	// 	t.Error("expected higher gas price to take priority, expected hash", tx2.Hash())
+	// }
 }
 
-func TestAAPending2(t *testing.T) {
+func TestAAPending(t *testing.T) {
 	t.Parallel()
 
 	pool, _ := setupTxPool()
