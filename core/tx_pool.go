@@ -535,7 +535,16 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	// Make sure the transaction is signed properly
-	from, err := types.Sender(pool.signer, tx)
+	var from common.Address
+	var err error
+
+	if tx.IsAA() {
+		from = *tx.To()
+		err = nil
+	} else {
+		from, err = types.Sender(pool.signer, tx) // already validated
+	}
+
 	if err != nil {
 		return ErrInvalidSender
 	}
@@ -627,7 +636,13 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		}
 	}
 	// Try to replace an existing transaction in the pending pool
-	from, _ := types.Sender(pool.signer, tx) // already validated
+	var from common.Address
+	if tx.IsAA() {
+		from = *tx.To()
+	} else {
+		from, _ = types.Sender(pool.signer, tx) // already validated
+	}
+
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
 		// Nonce already pending, check if required price bump is met
 		inserted, old := list.Add(tx, pool.config.PriceBump)
@@ -674,7 +689,12 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 // Note, this method assumes the pool lock is held!
 func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) (bool, error) {
 	// Try to insert the transaction into the future queue
-	from, _ := types.Sender(pool.signer, tx) // already validated
+	var from common.Address
+	if tx.IsAA() {
+		from = *tx.To()
+	} else {
+		from, _ = types.Sender(pool.signer, tx) // already validated
+	}
 
 	if pool.queue[from] == nil {
 		pool.queue[from] = newTxList(false, tx.IsAA())
@@ -871,7 +891,14 @@ func (pool *TxPool) Status(hashes []common.Hash) []TxStatus {
 		if tx == nil {
 			continue
 		}
-		from, _ := types.Sender(pool.signer, tx) // already validated
+
+		var from common.Address
+		if tx.IsAA() {
+			from = *tx.To()
+		} else {
+			from, _ = types.Sender(pool.signer, tx) // already validated
+		}
+
 		pool.mu.RLock()
 		if txList := pool.pending[from]; txList != nil && txList.txs.items[tx.Nonce()] != nil {
 			status[i] = TxStatusPending
@@ -904,7 +931,13 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	if tx == nil {
 		return
 	}
-	addr, _ := types.Sender(pool.signer, tx) // already validated during insertion
+
+	var addr common.Address
+	if tx.IsAA() {
+		addr = *tx.To()
+	} else {
+		addr, _ = types.Sender(pool.signer, tx) // already validated
+	}
 
 	// Remove it from the list of known transactions
 	pool.all.Remove(hash)
@@ -1027,7 +1060,14 @@ func (pool *TxPool) scheduleReorgLoop() {
 		case tx := <-pool.queueTxEventCh:
 			// Queue up the event, but don't schedule a reorg. It's up to the caller to
 			// request one later if they want the events sent.
-			addr, _ := types.Sender(pool.signer, tx)
+			var addr common.Address
+
+			if tx.IsAA() {
+				addr = *tx.To()
+			} else {
+				addr, _ = types.Sender(pool.signer, tx) // already validated
+			}
+
 			if _, ok := queuedEvents[addr]; !ok {
 				queuedEvents[addr] = newTxSortedMap()
 			}
@@ -1076,7 +1116,15 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 	// Check for pending transactions for every account that sent new ones
 	promoted := pool.promoteExecutables(promoteAddrs)
 	for _, tx := range promoted {
-		addr, _ := types.Sender(pool.signer, tx)
+
+		var addr common.Address
+
+		if tx.IsAA() {
+			addr = *tx.To()
+		} else {
+			addr, _ = types.Sender(pool.signer, tx) // already validated
+		}
+
 		if _, ok := events[addr]; !ok {
 			events[addr] = newTxSortedMap()
 		}
@@ -1518,9 +1566,19 @@ func (as *accountSet) contains(addr common.Address) bool {
 // containsTx checks if the sender of a given tx is within the set. If the sender
 // cannot be derived, this method returns false.
 func (as *accountSet) containsTx(tx *types.Transaction) bool {
-	if addr, err := types.Sender(as.signer, tx); err == nil {
+	var addr common.Address
+	var err error
+
+	if tx.IsAA() {
+		addr = *tx.To()
+	} else {
+		addr, err = types.Sender(as.signer, tx) // already validated
+	}
+
+	if err == nil {
 		return as.contains(addr)
 	}
+
 	return false
 }
 
@@ -1532,7 +1590,16 @@ func (as *accountSet) add(addr common.Address) {
 
 // addTx adds the sender of tx into the set.
 func (as *accountSet) addTx(tx *types.Transaction) {
-	if addr, err := types.Sender(as.signer, tx); err == nil {
+	var addr common.Address
+	var err error
+
+	if tx.IsAA() {
+		addr = *tx.To()
+	} else {
+		addr, err = types.Sender(as.signer, tx)
+	}
+
+	if err == nil {
 		as.add(addr)
 	}
 }
