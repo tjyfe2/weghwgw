@@ -56,9 +56,6 @@ var (
 	// within the pool.
 	ErrAlreadyKnown = errors.New("already known")
 
-	// Queue for AA transactions is already filled
-	ErrAACapacity = errors.New("aa txs at capacity")
-
 	// When aa validation fails
 	ErrInvalidAA = errors.New("aa tx invalidated")
 

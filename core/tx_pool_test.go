@@ -364,10 +364,6 @@ func TestAAQueue(t *testing.T) {
 	}
 }
 
-func TestAAPending(t *testing.T) {
-
-}
-
 func TestAAQueue2(t *testing.T) {
 	t.Parallel()
 
