@@ -903,13 +903,16 @@ func makeLog(size int) executionFunc {
 }
 
 func opPaygas(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-
-	// TODO: Store the popped value
-	if interpreter.paygasMode != PaygasNoOp {
+	gasprice := callContext.stack.pop()
+	if interpreter.paygasMode == PaygasNoOp {
+		interpreter.intPool.put(gasprice)
+	} else {
+		// TODO: Check the computed value against the GasPrice set in the tx
 		interpreter.evm.snapshots[len(interpreter.evm.snapshots)-1] = interpreter.evm.StateDB.Snapshot()
 		interpreter.paygasMode = PaygasNoOp
+		interpreter.paygasPrice = gasprice
 	}
-	interpreter.intPool.put(callContext.stack.pop())
+
 	return nil, nil
 }
 
