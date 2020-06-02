@@ -18,6 +18,7 @@ package vm
 
 import (
 	"hash"
+	"math/big"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -87,6 +88,7 @@ type EVMInterpreter struct {
 	cfg Config
 
 	paygasMode PaygasMode
+	paygasPrice *big.Int
 
 	intPool *intPool
 
