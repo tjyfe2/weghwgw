@@ -508,3 +508,4 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 func (evm *EVM) PaygasMode() PaygasMode { return evm.vmConfig.PaygasMode }
+func (evm *EVM) PaygasPrice() *big.Int  { return evm.vmConfig.paygasPrice }
