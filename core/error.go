@@ -64,5 +64,7 @@ var (
 	// than required to start the invocation.
 	ErrIntrinsicGas = errors.New("intrinsic gas too low")
 
+	ErrInvalidAATransaction = errors.New("invalid account abstraction transaction")
+
 	ErrInvalidAAPrefix = errors.New("invalid account abstraction prefix")
 )

@@ -233,6 +233,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
 	if st.msg.IsAA() {
+		if st.msg.Nonce() != 0 || st.msg.GasPrice().Sign() != 0 || st.msg.Value().Sign() != 0 {
+			return nil, ErrInvalidAATransaction
+		}
+
 		code := st.evm.StateDB.GetCode(st.to())
 		if code == nil || len(code) < len(aaPrefix) {
 			return nil, ErrInvalidAAPrefix
@@ -265,9 +269,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.gas -= gas
 
 	// Check clause 6
-	if msg.IsAA() && msg.Value().Sign() != 0 {
-		return nil, ErrInsufficientFundsForTransfer
-	} else if !msg.IsAA() && msg.Value().Sign() > 0 && !st.evm.CanTransfer(st.state, msg.From(), msg.Value()) {
+	if msg.Value().Sign() > 0 && !st.evm.CanTransfer(st.state, msg.From(), msg.Value()) {
 		return nil, ErrInsufficientFundsForTransfer
 	}
 	var (
