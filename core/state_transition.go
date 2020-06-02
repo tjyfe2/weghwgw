@@ -246,6 +246,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 				return nil, ErrInvalidAAPrefix
 			}
 		}
+		if st.evm.PaygasMode() == vm.PaygasNoOp {
+			st.evm.SetPaygasMode(vm.PaygasContinue)
+		}
 	}
 
 	// Check clauses 1-3, buy gas if everything is correct

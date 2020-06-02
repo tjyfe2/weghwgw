@@ -510,5 +510,6 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
-func (evm *EVM) PaygasMode() PaygasMode { return evm.vmConfig.PaygasMode }
-func (evm *EVM) PaygasPrice() *big.Int  { return evm.vmConfig.paygasPrice }
+func (evm *EVM) PaygasMode() PaygasMode              { return evm.vmConfig.PaygasMode }
+func (evm *EVM) SetPaygasMode(paygasMode PaygasMode) { evm.vmConfig.PaygasMode = paygasMode }
+func (evm *EVM) PaygasPrice() *big.Int               { return evm.vmConfig.paygasPrice }
