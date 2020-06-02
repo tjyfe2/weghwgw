@@ -67,4 +67,6 @@ var (
 	ErrInvalidAATransaction = errors.New("invalid account abstraction transaction")
 
 	ErrInvalidAAPrefix = errors.New("invalid account abstraction prefix")
+
+	ErrNoPaygas = errors.New("account abstraction transaction did not call PAYGAS")
 )

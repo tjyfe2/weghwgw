@@ -287,6 +287,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 		}
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		if msg.IsAA() && st.evm.PaygasMode() == vm.PaygasContinue {
+			return nil, ErrNoPaygas
+		}
 	}
 	if st.msg.IsAA() {
 		st.gasPrice = st.evm.PaygasPrice()
