@@ -65,7 +65,10 @@ func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, err
 				}(evm.interpreter)
 				evm.interpreter = interpreter
 			}
-			return interpreter.Run(contract, input, readOnly)
+			interpreter.SetAAConfig(evm.vmConfig.PaygasMode, evm.vmConfig.paygasPrice)
+			res, err := interpreter.Run(contract, input, readOnly)
+			evm.vmConfig.PaygasMode, evm.vmConfig.paygasPrice = interpreter.GetAAConfig()
+			return res, err
 		}
 	}
 	return nil, errors.New("no compatible interpreter")
