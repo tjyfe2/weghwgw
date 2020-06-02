@@ -225,18 +225,18 @@ func (tx *Transaction) IsAA() bool {
 // XXX Rename message to something less arbitrary?
 func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	msg := Message{
-		nonce:      tx.data.AccountNonce,
-		gasLimit:   tx.data.GasLimit,
-		gasPrice:   new(big.Int).Set(tx.data.Price),
-		to:         tx.data.Recipient,
-		amount:     tx.data.Amount,
-		data:       tx.data.Payload,
-		checkNonce: true,
+		nonce:    tx.data.AccountNonce,
+		gasLimit: tx.data.GasLimit,
+		gasPrice: new(big.Int).Set(tx.data.Price),
+		to:       tx.data.Recipient,
+		amount:   tx.data.Amount,
+		data:     tx.data.Payload,
 	}
 
 	var err error
 	msg.from, err = Sender(s, tx)
 	msg.isAA = msg.from.IsEntryPoint()
+	msg.checkNonce = !msg.isAA
 	return msg, err
 }
 
