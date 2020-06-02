@@ -18,19 +18,17 @@ package core
 
 import (
 	"errors"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 var (
-	ErrIncorrectPaygasMode = errors.New("incorrect PaygasMode for EVM")
+	ErrIncorrectAAConfig = errors.New("incorrect AA config for EVM")
 )
 
 func Validate(tx *types.Transaction, s types.Signer, evm *vm.EVM, gasLimit uint64) error {
-	if evm.PaygasMode() != vm.PaygasHalt {
-		return ErrIncorrectPaygasMode
+	if evm.PaygasMode() != vm.PaygasHalt || evm.PaygasPrice().Sign() != 0 {
+		return ErrIncorrectAAConfig
 	}
 	msg, err := tx.AsMessage(s)
 	if err != nil {
@@ -47,8 +45,6 @@ func Validate(tx *types.Transaction, s types.Signer, evm *vm.EVM, gasLimit uint6
 	if result.Err != nil {
 		return result.Err
 	}
-	price := new(big.Int)
-	price.SetBytes(result.ReturnData)
-	tx.SetAAGasPrice(price)
+	tx.SetAAGasPrice(evm.PaygasPrice())
 	return nil
 }
