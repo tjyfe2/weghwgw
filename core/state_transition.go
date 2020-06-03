@@ -181,9 +181,12 @@ func (st *StateTransition) to() common.Address {
 }
 
 func (st *StateTransition) buyGas() error {
-	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
-	if st.state.GetBalance(st.msg.Sponsor()).Cmp(mgval) < 0 {
-		return ErrInsufficientFunds
+	var mgval *big.Int
+	if !st.msg.IsAA() {
+		mgval = new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
+		if st.state.GetBalance(st.msg.Sponsor()).Cmp(mgval) < 0 {
+			return ErrInsufficientFunds
+		}
 	}
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
 		return err
@@ -191,7 +194,10 @@ func (st *StateTransition) buyGas() error {
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	st.state.SubBalance(st.msg.Sponsor(), mgval)
+	if !st.msg.IsAA() {
+		st.state.SubBalance(st.msg.Sponsor(), mgval)
+	}
+
 	return nil
 }
 
