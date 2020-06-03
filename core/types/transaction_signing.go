@@ -132,6 +132,9 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 		return common.Address{}, ErrInvalidChainId
 	}
 	V := new(big.Int).Sub(tx.data.V, s.chainIdMul)
+	if tx.data.R.Sign() == 0 && tx.data.S.Sign() == 0 && V.BitLen() <= 8 && V.Uint64() == 35 {
+		return common.NewEntryPointAddress(), nil
+	}
 	V.Sub(V, big8)
 	return recoverPlain(s.Hash(tx), tx.data.R, tx.data.S, V, true)
 }

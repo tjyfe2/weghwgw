@@ -25,6 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var aaPrefix = [...]byte{
+	0x33, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0x14, 0x60, 0x24, 0x57, 0x36, 0x60, 0x1f, 0x57, 0x00, 0x5b, 0x60, 0x00, 0x80, 0xfd, 0x5b,
+}
+
 /*
 The State Transitioning Model
 
@@ -66,6 +71,9 @@ type Message interface {
 	Nonce() uint64
 	CheckNonce() bool
 	Data() []byte
+
+	IsAA() bool
+	Sponsor() common.Address
 }
 
 // ExecutionResult includes all output after executing given evm
@@ -173,9 +181,12 @@ func (st *StateTransition) to() common.Address {
 }
 
 func (st *StateTransition) buyGas() error {
-	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
-	if st.state.GetBalance(st.msg.From()).Cmp(mgval) < 0 {
-		return ErrInsufficientFunds
+	var mgval *big.Int
+	if !st.msg.IsAA() {
+		mgval = new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
+		if st.state.GetBalance(st.msg.Sponsor()).Cmp(mgval) < 0 {
+			return ErrInsufficientFunds
+		}
 	}
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
 		return err
@@ -183,7 +194,10 @@ func (st *StateTransition) buyGas() error {
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	st.state.SubBalance(st.msg.From(), mgval)
+	if !st.msg.IsAA() {
+		st.state.SubBalance(st.msg.Sponsor(), mgval)
+	}
+
 	return nil
 }
 
@@ -224,6 +238,25 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// 5. there is no overflow when calculating intrinsic gas
 	// 6. caller has enough balance to cover asset transfer for **topmost** call
 
+	if st.msg.IsAA() {
+		if st.msg.Nonce() != 0 || st.msg.GasPrice().Sign() != 0 || st.msg.Value().Sign() != 0 {
+			return nil, ErrInvalidAATransaction
+		}
+
+		code := st.evm.StateDB.GetCode(st.to())
+		if code == nil || len(code) < len(aaPrefix) {
+			return nil, ErrInvalidAAPrefix
+		}
+		for i := range aaPrefix {
+			if code[i] != aaPrefix[i] {
+				return nil, ErrInvalidAAPrefix
+			}
+		}
+		if st.evm.PaygasMode() == vm.PaygasNoOp {
+			st.evm.SetPaygasMode(vm.PaygasContinue)
+		}
+	}
+
 	// Check clauses 1-3, buy gas if everything is correct
 	if err := st.preCheck(); err != nil {
 		return nil, err
@@ -255,9 +288,17 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if contractCreation {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
-		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		if !msg.IsAA() {
+			// Increment the nonce for the next transaction
+			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		}
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		if msg.IsAA() && st.evm.PaygasMode() == vm.PaygasContinue {
+			return nil, ErrNoPaygas
+		}
+	}
+	if st.msg.IsAA() {
+		st.gasPrice = st.evm.PaygasPrice()
 	}
 	st.refundGas()
 	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
@@ -279,7 +320,7 @@ func (st *StateTransition) refundGas() {
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-	st.state.AddBalance(st.msg.From(), remaining)
+	st.state.AddBalance(st.msg.Sponsor(), remaining)
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.

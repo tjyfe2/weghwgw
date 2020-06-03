@@ -41,7 +41,8 @@ type Config struct {
 	ExtraEips []int // Additional EIPS that are to be enabled
 
 	// paygasMode sets the behavior of the PAYGAS opcode.
-	PaygasMode PaygasMode
+	PaygasMode  PaygasMode
+	paygasPrice *big.Int
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
@@ -64,6 +65,9 @@ type Interpreter interface {
 	// }
 	// ```
 	CanRun([]byte) bool
+
+	SetAAConfig(paygasMode PaygasMode, paygasPrice *big.Int)
+	GetAAConfig() (paygasMode PaygasMode, paygasPrice *big.Int)
 }
 
 // callCtx contains the things that are per-call, such as stack and memory,
@@ -87,7 +91,7 @@ type EVMInterpreter struct {
 	evm *EVM
 	cfg Config
 
-	paygasMode PaygasMode
+	paygasMode  PaygasMode
 	paygasPrice *big.Int
 
 	intPool *intPool
@@ -136,8 +140,8 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 
 	return &EVMInterpreter{
 		paygasMode: cfg.PaygasMode,
-		evm: evm,
-		cfg: cfg,
+		evm:        evm,
+		cfg:        cfg,
 	}
 }
 
@@ -327,4 +331,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 // run by the current interpreter.
 func (in *EVMInterpreter) CanRun(code []byte) bool {
 	return true
+}
+
+func (in *EVMInterpreter) SetAAConfig(paygasMode PaygasMode, paygasPrice *big.Int) {
+	in.paygasMode = paygasMode
+	in.paygasPrice = paygasPrice
+}
+func (in *EVMInterpreter) GetAAConfig() (paygasMode PaygasMode, paygasPrice *big.Int) {
+	return in.paygasMode, in.paygasPrice
 }

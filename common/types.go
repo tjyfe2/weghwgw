@@ -175,6 +175,15 @@ func (h UnprefixedHash) MarshalText() ([]byte, error) {
 // Address represents the 20 byte address of an Ethereum account.
 type Address [AddressLength]byte
 
+// NewEntryPointAddress returns an ENTRY_POINT Address.
+func NewEntryPointAddress() Address {
+	var a Address
+	for i := range a {
+		a[i] = 0xFF
+	}
+	return a
+}
+
 // BytesToAddress returns Address with value b.
 // If b is larger than len(h), b will be cropped from the left.
 func BytesToAddress(b []byte) Address {
@@ -198,6 +207,16 @@ func IsHexAddress(s string) bool {
 		s = s[2:]
 	}
 	return len(s) == 2*AddressLength && isHex(s)
+}
+
+// IsEntryPointAddress returns true if the Address is the ENTRY_POINT Address.
+func (a Address) IsEntryPoint() bool {
+	for i := range a {
+		if a[i] != 0xFF {
+			return false
+		}
+	}
+	return true
 }
 
 // Bytes gets the string representation of the underlying address.

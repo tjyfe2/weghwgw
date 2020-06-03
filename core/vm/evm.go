@@ -65,7 +65,10 @@ func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, err
 				}(evm.interpreter)
 				evm.interpreter = interpreter
 			}
-			return interpreter.Run(contract, input, readOnly)
+			interpreter.SetAAConfig(evm.vmConfig.PaygasMode, evm.vmConfig.paygasPrice)
+			res, err := interpreter.Run(contract, input, readOnly)
+			evm.vmConfig.PaygasMode, evm.vmConfig.paygasPrice = interpreter.GetAAConfig()
+			return res, err
 		}
 	}
 	return nil, errors.New("no compatible interpreter")
@@ -285,7 +288,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	evm.pushSnapshot()
 
 	var (
-		to       = AccountRef(caller.Address())
+		to = AccountRef(caller.Address())
 	)
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
@@ -294,7 +297,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 	ret, err = run(evm, contract, input, false)
 
-	snapshot := evm.popSnapshot();
+	snapshot := evm.popSnapshot()
 
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
@@ -332,7 +335,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	evm.pushSnapshot()
 
 	var (
-		to       = AccountRef(caller.Address())
+		to = AccountRef(caller.Address())
 	)
 	// Initialise a new contract and make initialise the delegate values
 	contract := NewContract(caller, to, nil, gas).AsDelegate()
@@ -364,7 +367,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		return nil, gas, ErrDepth
 	}
 	var (
-		to       = AccountRef(addr)
+		to = AccountRef(addr)
 	)
 
 	evm.pushSnapshot()
@@ -506,3 +509,7 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
+
+func (evm *EVM) PaygasMode() PaygasMode              { return evm.vmConfig.PaygasMode }
+func (evm *EVM) SetPaygasMode(paygasMode PaygasMode) { evm.vmConfig.PaygasMode = paygasMode }
+func (evm *EVM) PaygasPrice() *big.Int               { return evm.vmConfig.paygasPrice }
