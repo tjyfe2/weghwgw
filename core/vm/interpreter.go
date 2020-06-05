@@ -238,7 +238,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if !operation.valid {
 			return nil, &ErrInvalidOpCode{opcode: op}
 		}
-		if in.paygasMode != PaygasNoOp && operation.internal {
+		if in.paygasMode != PaygasNoOp && !operation.internal {
 			return nil, &ErrInvalidOpCode{opcode: op}
 		}
 		// Validate stack
