@@ -907,7 +907,7 @@ func opPaygas(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	if interpreter.paygasMode == PaygasNoOp {
 		interpreter.intPool.put(gasprice)
 	} else {
-		mgval := new(big.Int).Mul(new(big.Int).SetUint64(interpreter.evm.GasLimit), gasprice)
+		mgval := new(big.Int).Mul(new(big.Int).SetUint64(interpreter.paygasLimit), gasprice)
 		if interpreter.evm.StateDB.GetBalance(callContext.contract.Address()).Cmp(mgval) < 0 {
 			return nil, ErrPaygasInsufficientFunds
 		}
