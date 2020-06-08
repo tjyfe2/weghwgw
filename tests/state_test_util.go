@@ -244,11 +244,15 @@ func (tx *stTransaction) toMessage(ps stPostState) (core.Message, error) {
 	// Derive sender from private key if present.
 	var from common.Address
 	if len(tx.PrivateKey) > 0 {
-		key, err := crypto.ToECDSA(tx.PrivateKey)
-		if err != nil {
-			return nil, fmt.Errorf("invalid private key: %v", err)
+		if len(tx.PrivateKey) == 1 && tx.PrivateKey[0] == 0xAA {
+			from = common.NewEntryPointAddress()
+		} else {
+			key, err := crypto.ToECDSA(tx.PrivateKey)
+			if err != nil {
+				return nil, fmt.Errorf("invalid private key: %v", err)
+			}
+			from = crypto.PubkeyToAddress(key.PublicKey)
 		}
-		from = crypto.PubkeyToAddress(key.PublicKey)
 	}
 	// Parse recipient if present.
 	var to *common.Address

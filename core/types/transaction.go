@@ -409,6 +409,7 @@ type Message struct {
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
+	isAA := from.IsEntryPoint()
 	return Message{
 		from:       from,
 		to:         to,
@@ -417,7 +418,8 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		gasLimit:   gasLimit,
 		gasPrice:   gasPrice,
 		data:       data,
-		checkNonce: checkNonce,
+		checkNonce: checkNonce && !isAA,
+		isAA:       isAA,
 	}
 }
 
