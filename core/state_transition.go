@@ -255,7 +255,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		if st.evm.PaygasMode() == vm.PaygasNoOp {
 			st.evm.SetPaygasMode(vm.PaygasContinue)
 		}
-		st.evm.SetPaygasLimit(st.msg.Gas())
+		if st.evm.PaygasLimit() == 0 {
+			st.evm.SetPaygasLimit(st.msg.Gas())
+		}
 	}
 
 	// Check clauses 1-3, buy gas if everything is correct
@@ -294,8 +296,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 		}
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
-		if msg.IsAA() && st.evm.PaygasMode() == vm.PaygasContinue {
-			return nil, ErrNoPaygas
+		if msg.IsAA() && st.evm.PaygasMode() != vm.PaygasNoOp {
+			if vmerr == vm.ErrPaygasInsufficientFunds {
+				return nil, vmerr
+			} else {
+				return nil, ErrNoPaygas
+			}
 		}
 	}
 	if st.msg.IsAA() {
