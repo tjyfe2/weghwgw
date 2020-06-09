@@ -623,31 +623,6 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		return false, err
 	}
 
-	addr, _ := txSponsor(pool.signer, tx)
-	txIsAA := tx.IsAA()
-	pending := pool.pending[addr]
-	queue := pool.queue[addr]
-
-	pendingIsAA := pending != nil && pending.isAA
-	queueIsAA := queue != nil && queue.isAA
-
-	if pendingIsAA || queueIsAA {
-		return false, ErrNotAA
-	}
-
-	// If the txlist was not marked as AA, then we remove its current transactions
-	if pending != nil && !pendingIsAA && txIsAA {
-		for _, tx := range pending.Flatten() {
-			pool.removeTx(tx.Hash(), true)
-		}
-	}
-
-	if queue != nil && !queueIsAA && txIsAA {
-		for _, tx := range queue.Flatten() {
-			pool.removeTx(tx.Hash(), true)
-		}
-	}
-
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Count()) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
@@ -664,6 +639,8 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			pool.removeTx(tx.Hash(), false)
 		}
 	}
+
+	addr, _ := txSponsor(pool.signer, tx)
 
 	// Try to replace an existing transaction in the pending pool
 	if list := pool.pending[addr]; list != nil && list.Overlaps(tx) {
