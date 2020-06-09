@@ -68,7 +68,7 @@ func testValidate(blockchain *BlockChain, statedb *state.StateDB, transaction *t
 	statedb.RevertToSnapshot(snapshotRevisionId)
 }
 
-func TestAATransactionValidation(t *testing.T) {
+func TestTransactionValidation(t *testing.T) {
 	var (
 		blockchain = setupBlockchain(10000000)
 		statedb, _ = blockchain.State()
@@ -122,4 +122,39 @@ func TestAATransactionValidation(t *testing.T) {
 	// test: valid, gasPrice 0
 	tx = aaTransaction(contractAddress, 100000, 1, true, big.NewInt(0))
 	testValidate(blockchain, statedb, tx, 400000, nil, t)
+}
+
+func TestInvalidEVMConfig(t *testing.T) {
+	var (
+		blockchain = setupBlockchain(10000000)
+		statedb, _ = blockchain.State()
+
+		context = NewEVMContext(types.AADummyMessage, blockchain.CurrentHeader(), blockchain, &common.Address{})
+		vmenv   = vm.NewEVM(context, statedb, blockchain.Config(), vm.Config{})
+
+		tx          = &types.Transaction{}
+		err         = Validate(tx, types.HomesteadSigner{}, vmenv, 400000)
+		expectedErr = ErrIncorrectAAConfig
+	)
+	if err != expectedErr {
+		t.Error("\n\texpected:", expectedErr, "\n\tgot:", err)
+	}
+}
+
+func TestMalformedTransaction(t *testing.T) {
+	var (
+		blockchain = setupBlockchain(10000000)
+		statedb, _ = blockchain.State()
+
+		context = NewEVMContext(types.AADummyMessage, blockchain.CurrentHeader(), blockchain, &common.Address{})
+		vmenv   = vm.NewEVM(context, statedb, blockchain.Config(), vm.Config{PaygasMode: vm.PaygasHalt})
+
+		key, _      = crypto.GenerateKey()
+		tx          = pricedTransaction(0, 100000, big.NewInt(0), key)
+		err         = Validate(tx, types.HomesteadSigner{}, vmenv, 400000)
+		expectedErr = ErrMalformedTransaction
+	)
+	if err != expectedErr {
+		t.Error("\n\texpected:", expectedErr, "\n\tgot:", err)
+	}
 }
