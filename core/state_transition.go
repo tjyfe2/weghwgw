@@ -297,7 +297,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		}
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 		if msg.IsAA() && st.evm.PaygasMode() != vm.PaygasNoOp {
-			if vmerr == vm.ErrPaygasInsufficientFunds {
+			if vmerr != nil {
 				return nil, vmerr
 			} else {
 				return nil, ErrNoPaygas
