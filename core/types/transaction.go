@@ -105,31 +105,6 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 	return &Transaction{data: d}
 }
 
-func NewAATransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	if len(data) > 0 {
-		data = common.CopyBytes(data)
-	}
-	d := txdata{
-		AccountNonce: nonce,
-		Recipient:    to,
-		Payload:      data,
-		Amount:       new(big.Int),
-		GasLimit:     gasLimit,
-		Price:        new(big.Int),
-		V:            big.NewInt(128 + 35),
-		R:            new(big.Int),
-		S:            new(big.Int),
-	}
-	if amount != nil {
-		d.Amount.Set(amount)
-	}
-	if gasPrice != nil {
-		d.Price.Set(gasPrice)
-	}
-
-	return &Transaction{data: d}
-}
-
 // ChainId returns which chain id this transaction was signed for (if at all)
 func (tx *Transaction) ChainId() *big.Int {
 	return deriveChainId(tx.data.V)
@@ -221,13 +196,7 @@ func (tx *Transaction) Validate() (big.Int, error) {
 }
 
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.data.Amount) }
-func (tx *Transaction) Nonce() uint64 {
-	if tx.IsAA() {
-		return 0
-	}
-
-	return tx.data.AccountNonce
-}
+func (tx *Transaction) Nonce() uint64   { return tx.data.AccountNonce }
 
 func (tx *Transaction) CheckNonce() bool { return true }
 
