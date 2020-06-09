@@ -130,10 +130,6 @@ func NewAATransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimi
 	return &Transaction{data: d}
 }
 
-func (tx *Transaction) IsAA() bool {
-	return (tx.data.R.Cmp(common.Big0) == 0 && tx.data.S.Cmp(common.Big0) == 0)
-}
-
 // ChainId returns which chain id this transaction was signed for (if at all)
 func (tx *Transaction) ChainId() *big.Int {
 	return deriveChainId(tx.data.V)

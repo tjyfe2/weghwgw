@@ -159,7 +159,7 @@ func TestMalformedTransaction(t *testing.T) {
 		key, _      = crypto.GenerateKey()
 		tx          = pricedTransaction(0, 100000, big.NewInt(0), key)
 		err         = Validate(tx, types.HomesteadSigner{}, vmenv, 400000)
-		expectedErr = ErrMalformedTransaction
+		expectedErr = ErrMalformedAATransaction
 	)
 	if err != expectedErr {
 		t.Error("\n\texpected:", expectedErr, "\n\tgot:", err)
