@@ -252,6 +252,12 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	return cpy, nil
 }
 
+func (tx *Transaction) WithAASignature() *Transaction {
+	cpy := &Transaction{data: tx.data}
+	cpy.data.V = big.NewInt(27)
+	return cpy
+}
+
 // Cost returns amount + gasprice * gaslimit.
 func (tx *Transaction) Cost() *big.Int {
 	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
@@ -407,6 +413,8 @@ type Message struct {
 	checkNonce bool
 	isAA       bool
 }
+
+var AADummyMessage = Message{from: common.NewEntryPointAddress(), gasPrice: big.NewInt(0)}
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
 	isAA := from.IsEntryPoint()
