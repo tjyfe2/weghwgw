@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/binary"
 	"math/big"
 	"testing"
 
@@ -31,12 +32,19 @@ import (
 )
 
 const (
-	codeWithoutPaygas = "3373ffffffffffffffffffffffffffffffffffffffff1460245736601f57005b600080fd5b00"
-	codeWithPaygas    = "3373ffffffffffffffffffffffffffffffffffffffff1460245736601f57005b600080fd5b6001aa00"
+	contractCode = "3373ffffffffffffffffffffffffffffffffffffffff1460245736601f57005b600080fd5b60016000355b81900380602a57602035603957005b604035aa00"
 )
 
-func aaTransaction(to common.Address, gaslimit uint64) *types.Transaction {
-	return types.NewTransaction(0, to, big.NewInt(0), gaslimit, big.NewInt(0), nil).WithAASignature()
+func aaTransaction(to common.Address, gaslimit uint64, loops uint64, callPaygas bool, gasPrice *big.Int) *types.Transaction {
+	data := make([]byte, 0x60)
+	binary.BigEndian.PutUint64(data[0x18:0x20], loops)
+	if callPaygas {
+		data[0x3f] = 1
+	}
+	gasPriceBytes := gasPrice.Bytes()
+	copy(data[0x60-len(gasPriceBytes):], gasPriceBytes)
+
+	return types.NewTransaction(0, to, big.NewInt(0), gaslimit, big.NewInt(0), data).WithAASignature()
 }
 
 func setupBlockchain(blockGasLimit uint64) *BlockChain {
@@ -47,14 +55,17 @@ func setupBlockchain(blockGasLimit uint64) *BlockChain {
 	return blockchain
 }
 
-func doValidate(blockchain *BlockChain, statedb *state.StateDB, transaction *types.Transaction, validationGasLimit uint64) error {
+func testValidate(blockchain *BlockChain, statedb *state.StateDB, transaction *types.Transaction, validationGasLimit uint64, expectedErr error, t *testing.T) {
 	var (
 		snapshotRevisionId = statedb.Snapshot()
 		context            = NewEVMContext(types.AADummyMessage, blockchain.CurrentHeader(), blockchain, &common.Address{})
-		vmenv              = vm.NewEVM(context, statedb, blockchain.Config(), vm.Config{})
+		vmenv              = vm.NewEVM(context, statedb, blockchain.Config(), vm.Config{PaygasMode: vm.PaygasHalt})
+		err                = Validate(transaction, types.HomesteadSigner{}, vmenv, validationGasLimit)
 	)
-	defer statedb.RevertToSnapshot(snapshotRevisionId)
-	return Validate(transaction, types.HomesteadSigner{}, vmenv, validationGasLimit)
+	if err != expectedErr {
+		t.Error("\n\texpected:", expectedErr, "\n\tgot:", err)
+	}
+	statedb.RevertToSnapshot(snapshotRevisionId)
 }
 
 func TestAATransactionValidation(t *testing.T) {
@@ -62,33 +73,53 @@ func TestAATransactionValidation(t *testing.T) {
 		blockchain = setupBlockchain(10000000)
 		statedb, _ = blockchain.State()
 
-		key, _                = crypto.GenerateKey()
-		contractCreator       = crypto.PubkeyToAddress(key.PublicKey)
-		contractWithoutPaygas = crypto.CreateAddress(contractCreator, 0)
-		contractWithPaygas    = crypto.CreateAddress(contractCreator, 1)
+		key, _          = crypto.GenerateKey()
+		contractCreator = crypto.PubkeyToAddress(key.PublicKey)
+		contractAddress = crypto.CreateAddress(contractCreator, 0)
+		tx              = &types.Transaction{}
 	)
-	statedb.SetBalance(contractWithoutPaygas, big.NewInt(1000000))
-	statedb.SetCode(contractWithoutPaygas, common.FromHex(codeWithoutPaygas))
-	statedb.SetBalance(contractWithPaygas, big.NewInt(100000))
-	statedb.SetCode(contractWithPaygas, common.FromHex(codeWithPaygas))
+	statedb.SetBalance(contractAddress, big.NewInt(100000))
+	statedb.SetCode(contractAddress, common.FromHex(contractCode))
 
-	tx := aaTransaction(contractWithoutPaygas, 100000)
-	if err := doValidate(blockchain, statedb, tx, 400000); err != ErrNoPaygas {
-		t.Error("\n\texpected:", ErrNoPaygas, "\n\tgot:", err)
-	}
+	// test: invalid, no PAYGAS
+	tx = aaTransaction(contractAddress, 100000, 1, false, big.NewInt(1))
+	testValidate(blockchain, statedb, tx, 400000, ErrNoPaygas, t)
 
-	tx = aaTransaction(contractWithPaygas, 100000)
-	if err := doValidate(blockchain, statedb, tx, 400000); err != nil {
-		t.Error("\n\texpected:", "no error", "\n\tgot:", err)
-	}
+	// test: invalid, insufficient funds
+	tx = aaTransaction(contractAddress, 100000, 1, true, big.NewInt(2))
+	testValidate(blockchain, statedb, tx, 400000, vm.ErrPaygasInsufficientFunds, t)
 
-	tx = aaTransaction(contractWithPaygas, 1)
-	if err := doValidate(blockchain, statedb, tx, 400000); err != ErrIntrinsicGas {
-		t.Error("\n\texpected:", ErrIntrinsicGas, "\n\tgot:", err)
-	}
+	// test: invalid, gasLimit too low for intrinsic gas cost
+	tx = aaTransaction(contractAddress, 1, 1, true, big.NewInt(1))
+	testValidate(blockchain, statedb, tx, 400000, ErrIntrinsicGas, t)
 
-	tx = aaTransaction(contractWithPaygas, 1000000)
-	if err := doValidate(blockchain, statedb, tx, 400000); err != vm.ErrPaygasInsufficientFunds {
-		t.Error("\n\texpected:", vm.ErrPaygasInsufficientFunds, "\n\tgot:", err)
-	}
+	// test: invalid, gasLimit too low for loops
+	tx = aaTransaction(contractAddress, 100000, 100000, true, big.NewInt(1))
+	testValidate(blockchain, statedb, tx, 400000, vm.ErrOutOfGas, t)
+
+	// test: valid, gasLimit < validationGasLimit
+	tx = aaTransaction(contractAddress, 100000, 1, true, big.NewInt(1))
+	testValidate(blockchain, statedb, tx, 400000, nil, t)
+
+	// test: valid, validationGasLimit < gasLimit
+	tx = aaTransaction(contractAddress, 100000, 1, true, big.NewInt(1))
+	testValidate(blockchain, statedb, tx, 50000, nil, t)
+
+	// test: invalid, validationGasLimit too low for intrinsic gas cost
+	tx = aaTransaction(contractAddress, 100000, 1, true, big.NewInt(1))
+	testValidate(blockchain, statedb, tx, 1, ErrIntrinsicGas, t)
+
+	// test: invalid, validationGasLimit too low for loops
+	tx = aaTransaction(contractAddress, 100000, 100000, true, big.NewInt(1))
+	testValidate(blockchain, statedb, tx, 50000, vm.ErrOutOfGas, t)
+
+	statedb.SetBalance(contractAddress, big.NewInt(0))
+
+	// test: invalid, insufficient funds
+	tx = aaTransaction(contractAddress, 100000, 1, true, big.NewInt(1))
+	testValidate(blockchain, statedb, tx, 400000, vm.ErrPaygasInsufficientFunds, t)
+
+	// test: valid, gasPrice 0
+	tx = aaTransaction(contractAddress, 100000, 1, true, big.NewInt(0))
+	testValidate(blockchain, statedb, tx, 400000, nil, t)
 }
