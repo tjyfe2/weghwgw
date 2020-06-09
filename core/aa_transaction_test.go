@@ -35,8 +35,15 @@ const (
 	contractCode = "3373ffffffffffffffffffffffffffffffffffffffff1460245736601f57005b600080fd5b60016000355b81900380602a57602035603957005b604035aa00"
 )
 
+// aaTransaction creates a new AA transaction to a deployed instance of the test contract.
+// Parameters are the contract address, the transaction gas limit,
+// the number of loops to run inside the contract (minimum: 1, gas per loop: 26),
+// whether to call PAYGAS at the end, the gas price to be returned from PAYGAS (if called).
 func aaTransaction(to common.Address, gaslimit uint64, loops uint64, callPaygas bool, gasPrice *big.Int) *types.Transaction {
 	data := make([]byte, 0x60)
+	if loops == 0 {
+		loops = 1
+	}
 	binary.BigEndian.PutUint64(data[0x18:0x20], loops)
 	if callPaygas {
 		data[0x3f] = 1
