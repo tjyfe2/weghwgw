@@ -268,6 +268,11 @@ func (tx *Transaction) Size() common.StorageSize {
 	return common.StorageSize(c)
 }
 
+// IsAA returns the result of a basic AA signature check.
+func (tx *Transaction) IsAA() bool {
+	return tx.data.R.Sign() == 0 && tx.data.S.Sign() == 0
+}
+
 // AsMessage returns the transaction as a core.Message.
 //
 // AsMessage requires a signer to derive the sender.
@@ -275,17 +280,18 @@ func (tx *Transaction) Size() common.StorageSize {
 // XXX Rename message to something less arbitrary?
 func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	msg := Message{
-		nonce:      tx.data.AccountNonce,
-		gasLimit:   tx.data.GasLimit,
-		gasPrice:   new(big.Int).Set(tx.data.Price),
-		to:         tx.data.Recipient,
-		amount:     tx.data.Amount,
-		data:       tx.data.Payload,
-		checkNonce: true,
+		nonce:    tx.data.AccountNonce,
+		gasLimit: tx.data.GasLimit,
+		gasPrice: new(big.Int).Set(tx.data.Price),
+		to:       tx.data.Recipient,
+		amount:   tx.data.Amount,
+		data:     tx.data.Payload,
 	}
 
 	var err error
 	msg.from, err = Sender(s, tx)
+	msg.isAA = msg.from.IsEntryPoint()
+	msg.checkNonce = !msg.isAA
 	return msg, err
 }
 
@@ -299,6 +305,12 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	cpy := &Transaction{data: tx.data}
 	cpy.data.R, cpy.data.S, cpy.data.V = r, s, v
 	return cpy, nil
+}
+
+func (tx *Transaction) WithAASignature() *Transaction {
+	cpy := &Transaction{data: tx.data}
+	cpy.data.V = big.NewInt(27)
+	return cpy
 }
 
 // Cost returns amount + gasprice * gaslimit.
@@ -317,6 +329,10 @@ func (tx *Transaction) Cost() *big.Int {
 // The return values should not be modified by the caller.
 func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
 	return tx.data.V, tx.data.R, tx.data.S
+}
+
+func (tx *Transaction) SetAAGasPrice(price *big.Int) {
+	tx.price.Store(price)
 }
 
 // Transactions is a Transaction slice type for basic sorting.
@@ -455,9 +471,13 @@ type Message struct {
 	gasPrice   *big.Int
 	data       []byte
 	checkNonce bool
+	isAA       bool
 }
 
+var AADummyMessage = Message{from: common.NewEntryPointAddress(), gasPrice: big.NewInt(0)}
+
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
+	isAA := from.IsEntryPoint()
 	return Message{
 		from:       from,
 		to:         to,
@@ -466,15 +486,25 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		gasLimit:   gasLimit,
 		gasPrice:   gasPrice,
 		data:       data,
-		checkNonce: checkNonce,
+		checkNonce: checkNonce && !isAA,
+		isAA:       isAA,
 	}
 }
 
-func (m Message) From() common.Address { return m.from }
-func (m Message) To() *common.Address  { return m.to }
-func (m Message) GasPrice() *big.Int   { return m.gasPrice }
-func (m Message) Value() *big.Int      { return m.amount }
-func (m Message) Gas() uint64          { return m.gasLimit }
-func (m Message) Nonce() uint64        { return m.nonce }
-func (m Message) Data() []byte         { return m.data }
-func (m Message) CheckNonce() bool     { return m.checkNonce }
+func (m Message) From() common.Address    { return m.from }
+func (m Message) To() *common.Address     { return m.to }
+func (m Message) GasPrice() *big.Int      { return m.gasPrice }
+func (m Message) Value() *big.Int         { return m.amount }
+func (m Message) Gas() uint64             { return m.gasLimit }
+func (m Message) Nonce() uint64           { return m.nonce }
+func (m Message) Data() []byte            { return m.data }
+func (m Message) CheckNonce() bool        { return m.checkNonce }
+func (m Message) IsAA() bool              { return m.isAA }
+func (m *Message) SetGas(gasLimit uint64) { m.gasLimit = gasLimit }
+func (m Message) Sponsor() common.Address {
+	if !m.isAA {
+		return m.from
+	} else {
+		return *m.to
+	}
+}

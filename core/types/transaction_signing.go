@@ -138,6 +138,9 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 	}
 
 	V := new(big.Int).Sub(tx.data.V, s.chainIdMul)
+	if tx.data.R.Sign() == 0 && tx.data.S.Sign() == 0 && V.BitLen() <= 8 && V.Uint64() == 35 {
+		return common.NewEntryPointAddress(), nil
+	}
 	V.Sub(V, big8)
 	return recoverPlain(s.Hash(tx), tx.data.R, tx.data.S, V, true)
 }
@@ -230,6 +233,9 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (commo
 		return common.Address{}, ErrInvalidSig
 	}
 	V := byte(Vb.Uint64() - 27)
+	if R.Sign() == 0 && S.Sign() == 0 && V == 0 {
+		return common.NewEntryPointAddress(), nil
+	}
 	if !crypto.ValidateSignatureValues(V, R, S, homestead) {
 		return common.Address{}, ErrInvalidSig
 	}

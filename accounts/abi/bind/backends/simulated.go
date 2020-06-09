@@ -650,6 +650,14 @@ func (m callmsg) GasPrice() *big.Int   { return m.CallMsg.GasPrice }
 func (m callmsg) Gas() uint64          { return m.CallMsg.Gas }
 func (m callmsg) Value() *big.Int      { return m.CallMsg.Value }
 func (m callmsg) Data() []byte         { return m.CallMsg.Data }
+func (m callmsg) IsAA() bool           { return m.CallMsg.IsAA }
+func (m callmsg) Sponsor() common.Address {
+	if !m.CallMsg.IsAA {
+		return m.CallMsg.From
+	} else {
+		return *m.CallMsg.To
+	}
+}
 
 // filterBackend implements filters.Backend to support filtering for logs without
 // taking bloom-bits acceleration structures into account.
