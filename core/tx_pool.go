@@ -530,29 +530,24 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
-	var start = time.Now()
 	validationMeter.Mark(1)
 	// Reject transactions over defined size to prevent DOS attacks
 	if uint64(tx.Size()) > txMaxSize {
-		validationTimer.UpdateSince(start)
 		return ErrOversizedData
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur if you create a transaction using the RPC.
 	if tx.Value().Sign() < 0 {
-		validationTimer.UpdateSince(start)
 		return ErrNegativeValue
 	}
 	// Ensure the transaction doesn't exceed the current block limit gas.
 	if pool.currentMaxGas < tx.Gas() {
-		validationTimer.UpdateSince(start)
 		return ErrGasLimit
 	}
 
 	addr, err := txSponsor(pool.signer, tx)
 
 	if err != nil {
-		validationTimer.UpdateSince(start)
 		return ErrInvalidSender
 	}
 
@@ -566,37 +561,30 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(addr) // account may be local even if the transaction arrived from the network
 	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
-		validationTimer.UpdateSince(start)
 		return ErrUnderpriced
 	}
 
 	// Ensure the transaction adheres to nonce ordering
 	if !tx.IsAA() && (pool.currentState.GetNonce(addr) > tx.Nonce()) {
-		validationTimer.UpdateSince(start)
 		return ErrNonceTooLow
 	}
 
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
 	if pool.currentState.GetBalance(addr).Cmp(tx.Cost()) < 0 {
-		validationTimer.UpdateSince(start)
 		return ErrInsufficientFunds
 	}
 
 	// Ensure the transaction has more gas than the basic tx fee.
 	intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true, pool.istanbul)
 	if err != nil {
-		validationTimer.UpdateSince(start)
 		return err
 	}
 
 	if tx.Gas() < intrGas {
-		validationTimer.UpdateSince(start)
 		return ErrIntrinsicGas
 	}
 
-	validationTimer.UpdateSince(start)
-	successValidationTimer.UpdateSince(start)
 	return nil
 }
 
@@ -617,11 +605,15 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	}
 
 	// If the transaction fails basic validation, discard it
+	var start = time.Now()
 	if err := pool.validateTx(tx, local); err != nil {
+		validationTimer.UpdateSince(start)
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
 		invalidTxMeter.Mark(1)
 		return false, err
 	}
+	validationTimer.UpdateSince(start)
+	successValidationTimer.UpdateSince(start)
 
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Count()) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
