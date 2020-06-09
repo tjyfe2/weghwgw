@@ -512,5 +512,6 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 func (evm *EVM) PaygasMode() PaygasMode              { return evm.vmConfig.PaygasMode }
 func (evm *EVM) SetPaygasMode(paygasMode PaygasMode) { evm.vmConfig.PaygasMode = paygasMode }
+func (evm *EVM) PaygasLimit() uint64                 { return evm.vmConfig.paygasLimit }
 func (evm *EVM) SetPaygasLimit(paygasLimit uint64)   { evm.vmConfig.paygasLimit = paygasLimit }
 func (evm *EVM) PaygasPrice() *big.Int               { return evm.vmConfig.paygasPrice }

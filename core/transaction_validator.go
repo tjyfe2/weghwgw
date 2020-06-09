@@ -23,27 +23,29 @@ import (
 )
 
 var (
-	ErrIncorrectAAConfig = errors.New("incorrect AA config for EVM")
+	ErrIncorrectAAConfig    = errors.New("incorrect AA config for EVM")
+	ErrMalformedTransaction = errors.New("AA transaction malformed")
 )
 
 func Validate(tx *types.Transaction, s types.Signer, evm *vm.EVM, gasLimit uint64) error {
-	if evm.PaygasMode() != vm.PaygasHalt || evm.PaygasPrice().Sign() != 0 {
+	if evm.PaygasMode() != vm.PaygasHalt {
 		return ErrIncorrectAAConfig
+	}
+	evm.SetPaygasLimit(tx.Gas())
+	if gasLimit > tx.Gas() {
+		gasLimit = tx.Gas()
 	}
 	msg, err := tx.AsMessage(s)
 	if err != nil {
 		return err
+	} else if !msg.IsAA() {
+		return ErrMalformedTransaction
 	}
-	if gasLimit > msg.Gas() {
-		gasLimit = msg.Gas()
-	}
+	msg.SetGas(gasLimit)
 	gp := new(GasPool).AddGas(gasLimit)
-	result, err := ApplyMessage(evm, msg, gp)
+	_, err = ApplyMessage(evm, msg, gp)
 	if err != nil {
 		return err
-	}
-	if result.Err != nil {
-		return result.Err
 	}
 	tx.SetAAGasPrice(evm.PaygasPrice())
 	return nil

@@ -252,6 +252,12 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	return cpy, nil
 }
 
+func (tx *Transaction) WithAASignature() *Transaction {
+	cpy := &Transaction{data: tx.data}
+	cpy.data.V = big.NewInt(27)
+	return cpy
+}
+
 // Cost returns amount + gasprice * gaslimit.
 func (tx *Transaction) Cost() *big.Int {
 	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
@@ -408,6 +414,8 @@ type Message struct {
 	isAA       bool
 }
 
+var AADummyMessage = Message{from: common.NewEntryPointAddress(), gasPrice: big.NewInt(0)}
+
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
 	isAA := from.IsEntryPoint()
 	return Message{
@@ -423,15 +431,16 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 	}
 }
 
-func (m Message) From() common.Address { return m.from }
-func (m Message) To() *common.Address  { return m.to }
-func (m Message) GasPrice() *big.Int   { return m.gasPrice }
-func (m Message) Value() *big.Int      { return m.amount }
-func (m Message) Gas() uint64          { return m.gasLimit }
-func (m Message) Nonce() uint64        { return m.nonce }
-func (m Message) Data() []byte         { return m.data }
-func (m Message) CheckNonce() bool     { return m.checkNonce }
-func (m Message) IsAA() bool           { return m.isAA }
+func (m Message) From() common.Address    { return m.from }
+func (m Message) To() *common.Address     { return m.to }
+func (m Message) GasPrice() *big.Int      { return m.gasPrice }
+func (m Message) Value() *big.Int         { return m.amount }
+func (m Message) Gas() uint64             { return m.gasLimit }
+func (m Message) Nonce() uint64           { return m.nonce }
+func (m Message) Data() []byte            { return m.data }
+func (m Message) CheckNonce() bool        { return m.checkNonce }
+func (m Message) IsAA() bool              { return m.isAA }
+func (m *Message) SetGas(gasLimit uint64) { m.gasLimit = gasLimit }
 func (m Message) Sponsor() common.Address {
 	if !m.isAA {
 		return m.from
