@@ -178,8 +178,8 @@ func (tx *Transaction) Gas() uint64  { return tx.data.GasLimit }
 func (tx *Transaction) GasPrice() *big.Int {
 	if tx.IsAA() {
 		if price := tx.price.Load(); price != nil {
-			var current_price big.Int = price.(big.Int)
-			return &current_price
+			var current_price *big.Int = price.(*big.Int)
+			return current_price
 		}
 
 		return nil
@@ -189,13 +189,6 @@ func (tx *Transaction) GasPrice() *big.Int {
 }
 
 func (tx *Transaction) RawGasPrice() *big.Int { return tx.data.Price }
-
-func (tx *Transaction) Validate() (big.Int, error) {
-	var limit = big.NewInt(40000)
-	tx.price.Store(*big.NewInt(10))
-	// return error here
-	return *limit, nil
-}
 
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.data.Amount) }
 func (tx *Transaction) Nonce() uint64   { return tx.data.AccountNonce }
