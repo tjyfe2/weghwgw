@@ -167,7 +167,8 @@ type TxPoolConfig struct {
 	AccountQueue uint64 // Maximum number of non-executable transaction slots permitted per account
 	GlobalQueue  uint64 // Maximum number of non-executable transaction slots for all accounts
 
-	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
+	Lifetime   time.Duration // Maximum amount of time non-executable transaction are queued
+	AAGasLimit uint64        // Maximum gas used for AA validation
 }
 
 // DefaultTxPoolConfig contains the default configurations for the transaction
@@ -184,7 +185,8 @@ var DefaultTxPoolConfig = TxPoolConfig{
 	AccountQueue: 64,
 	GlobalQueue:  1024,
 
-	Lifetime: 3 * time.Hour,
+	Lifetime:   3 * time.Hour,
+	AAGasLimit: 400000,
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -574,7 +576,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		now := time.Now()
 		context := NewEVMContext(types.AAEntryMessage, pool.chain.CurrentBlock().Header(), pool.chain, &common.Address{})
 		vm := vm.NewEVM(context, pool.currentState, pool.chain.Config(), vm.Config{PaygasMode: vm.PaygasHalt})
-		err := Validate(tx, pool.signer, vm, 400000)
+		err := Validate(tx, pool.signer, vm, pool.config.AAGasLimit)
 		aaValidationTimer.UpdateSince(now)
 		if err != nil {
 			return ErrInvalidAA

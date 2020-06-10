@@ -339,26 +339,32 @@ func TestAAQueue(t *testing.T) {
 	pool, _ := setupTxPool()
 	defer pool.Stop()
 	key1, _ := crypto.GenerateKey()
+	config := testTxPoolConfig
+	beforeLimit := config.AAGasLimit
+	config.AAGasLimit = 400000
 
 	address1 := crypto.PubkeyToAddress(key1.PublicKey)
 
 	tx1 := aaTransaction(address1, 50000, 1, false, big.NewInt(1))
-	tx2 := aaTransaction(address1, 50000, 1, true, big.NewInt(1))
+	tx2 := aaTransaction(address1, 400000, 16000, true, big.NewInt(1))
 	tx3 := aaTransaction(address1, 50000, 1, true, big.NewInt(1))
+	tx4 := aaTransaction(address1, 50000, 1, true, big.NewInt(2))
 
 	pool.currentState.SetCode(address1, common.FromHex(contractCode))
 	pool.currentState.AddBalance(address1, big.NewInt(1000000))
 
-	pool.add(tx1, false)
 	<-pool.requestReset(nil, nil)
+	pool.add(tx1, false)
+	pool.add(tx2, false)
 
 	// any aa validation error (in this case, does not call paygas)
 	// should not progress the tx
+	// Also if gas required is greater than the config max
 	if len(pool.queue) != 0 {
 		t.Error("expected valid txs to be 0 is", len(pool.queue))
 	}
 
-	pool.add(tx2, false)
+	pool.add(tx3, false)
 
 	if len(pool.queue) != 1 {
 		t.Error("expected valid txs to be 1 is", len(pool.queue))
@@ -366,7 +372,7 @@ func TestAAQueue(t *testing.T) {
 
 	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, address1))
 
-	pool.add(tx3, false)
+	pool.add(tx4, false)
 
 	if len(pool.queue) > 0 {
 		t.Error("expected transaction queue to be empty. is", len(pool.queue))
@@ -374,6 +380,8 @@ func TestAAQueue(t *testing.T) {
 	if len(pool.pending) > 1 {
 		t.Error("expected pending to have a transaction", len(pool.pending))
 	}
+
+	config.AAGasLimit = beforeLimit
 }
 
 func TestAAQueue2(t *testing.T) {
