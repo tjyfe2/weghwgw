@@ -188,6 +188,8 @@ func (tx *Transaction) GasPrice() *big.Int {
 	return new(big.Int).Set(tx.data.Price)
 }
 
+func (tx *Transaction) RawGasPrice() *big.Int { return tx.data.Price }
+
 func (tx *Transaction) Validate() (big.Int, error) {
 	var limit = big.NewInt(40000)
 	tx.price.Store(*big.NewInt(10))

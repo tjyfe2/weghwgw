@@ -26,8 +26,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -59,8 +61,8 @@ var (
 	// When aa validation fails
 	ErrInvalidAA = errors.New("aa tx invalidated")
 
-	// When incoming tx is not AA for an AA account
-	ErrNotAA = errors.New("tx is not AA")
+	// AA values are not zeroed out
+	ErrInvalidAAData = errors.New("aa values not zeroed out")
 
 	// ErrInvalidSender is returned if the transaction contains an invalid signature.
 	ErrInvalidSender = errors.New("invalid sender")
@@ -140,10 +142,12 @@ const (
 // blockChain provides the state of blockchain and current gas limit to do
 // some pre checks in tx pool and event subscribers.
 type blockChain interface {
+	Config() *params.ChainConfig
 	CurrentBlock() *types.Block
+	GetHeader(common.Hash, uint64) *types.Header
 	GetBlock(hash common.Hash, number uint64) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
-
+	Engine() consensus.Engine
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 }
 
@@ -545,6 +549,20 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrGasLimit
 	}
 
+	if tx.IsAA() {
+		if tx.Value().Sign() > 0 {
+			return ErrInvalidAAData
+		}
+
+		if tx.RawGasPrice().Sign() != 0 {
+			return ErrInvalidAAData
+		}
+
+		if tx.Nonce() != 0 {
+			return ErrInvalidAAData
+		}
+	}
+
 	addr, err := txSponsor(pool.signer, tx)
 
 	if err != nil {
@@ -552,7 +570,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	if tx.IsAA() {
-		_, err := tx.Validate()
+		context := NewEVMContext(types.AADummyMessage, pool.chain.CurrentBlock().Header(), pool.chain, &common.Address{})
+		vm := vm.NewEVM(context, pool.currentState, pool.chain.Config(), vm.Config{PaygasMode: vm.PaygasHalt})
+		err := Validate(tx, pool.signer, vm, 400000)
 		if err != nil {
 			return ErrInvalidAA
 		}
