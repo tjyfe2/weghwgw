@@ -127,6 +127,7 @@ var (
 	validationMeter        = metrics.NewRegisteredMeter("txpool/validation", nil)
 	validationTimer        = metrics.NewRegisteredTimer("txpool/validation/execution", nil)
 	successValidationTimer = metrics.NewRegisteredTimer("txpool/validation_success/execution", nil)
+	aaValidationTimer      = metrics.NewRegisteredTimer("txpool/aa_validation/execution", nil)
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -570,9 +571,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	if tx.IsAA() {
-		context := NewEVMContext(types.AADummyMessage, pool.chain.CurrentBlock().Header(), pool.chain, &common.Address{})
+		now := time.Now()
+		context := NewEVMContext(types.AAEntryMessage, pool.chain.CurrentBlock().Header(), pool.chain, &common.Address{})
 		vm := vm.NewEVM(context, pool.currentState, pool.chain.Config(), vm.Config{PaygasMode: vm.PaygasHalt})
 		err := Validate(tx, pool.signer, vm, 400000)
+		aaValidationTimer.UpdateSince(now)
 		if err != nil {
 			return ErrInvalidAA
 		}
