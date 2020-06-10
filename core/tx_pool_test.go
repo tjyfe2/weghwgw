@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -56,8 +58,16 @@ func (bc *testBlockChain) CurrentBlock() *types.Block {
 	}, nil, nil, nil)
 }
 
+func (bc *testBlockChain) Config() *params.ChainConfig { return params.AllEthashProtocolChanges }
+
+func (bc *testBlockChain) Engine() consensus.Engine { return ethash.NewFaker() }
+
 func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return bc.CurrentBlock()
+}
+
+func (bc *testBlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
+	return bc.CurrentBlock().Header()
 }
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
@@ -70,10 +80,6 @@ func (bc *testBlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) even
 
 func transaction(nonce uint64, gaslimit uint64, key *ecdsa.PrivateKey) *types.Transaction {
 	return pricedTransaction(nonce, gaslimit, big.NewInt(1), key)
-}
-
-func aaTransaction(gaslimit uint64, to common.Address) *types.Transaction {
-	return types.NewAATransaction(0, &to, big.NewInt(0), gaslimit, big.NewInt(0), nil)
 }
 
 func pricedTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
@@ -328,39 +334,45 @@ func TestTransactionQueue2(t *testing.T) {
 }
 
 func TestAAQueue(t *testing.T) {
-	// should test that more expensive takes place in queue
-	// should make sure only one goes to pending
-	// need to test validation error
-	// need to test intrinsic gas
-	// need to test not enough gas
 	t.Parallel()
 
 	pool, _ := setupTxPool()
 	defer pool.Stop()
 	key1, _ := crypto.GenerateKey()
+
 	address1 := crypto.PubkeyToAddress(key1.PublicKey)
 
-	tx1 := aaTransaction(22000, address1)
+	tx1 := aaTransaction(address1, 50000, 1, false, big.NewInt(1))
+	tx2 := aaTransaction(address1, 50000, 1, true, big.NewInt(1))
+	tx3 := aaTransaction(address1, 50000, 1, true, big.NewInt(1))
 
+	pool.currentState.SetCode(address1, common.FromHex(contractCode))
 	pool.currentState.AddBalance(address1, big.NewInt(1000000))
-	<-pool.requestReset(nil, nil)
 
 	pool.add(tx1, false)
+	<-pool.requestReset(nil, nil)
 
-	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, address1))
-	if len(pool.pending) != 1 {
-		t.Error("expected valid txs to be 1 is", len(pool.pending))
+	// any aa validation error (in this case, does not call paygas)
+	// should not progress the tx
+	if len(pool.queue) != 0 {
+		t.Error("expected valid txs to be 0 is", len(pool.queue))
 	}
 
-	tx2 := aaTransaction(22000, address1)
 	pool.add(tx2, false)
 
+	if len(pool.queue) != 1 {
+		t.Error("expected valid txs to be 1 is", len(pool.queue))
+	}
+
 	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, address1))
+
+	pool.add(tx3, false)
+
 	if len(pool.queue) > 0 {
 		t.Error("expected transaction queue to be empty. is", len(pool.queue))
 	}
 	if len(pool.pending) > 1 {
-		t.Error("expected transaction queue to be empty. is", len(pool.queue))
+		t.Error("expected pending to have a transaction", len(pool.pending))
 	}
 }
 
@@ -370,31 +382,29 @@ func TestAAQueue2(t *testing.T) {
 	pool, _ := setupTxPool()
 	defer pool.Stop()
 	key1, _ := crypto.GenerateKey()
+
 	address1 := crypto.PubkeyToAddress(key1.PublicKey)
 
-	tx1 := aaTransaction(100, address1)
-	tx2 := aaTransaction(100, address1)
-	tx3 := aaTransaction(100, address1)
+	tx1 := aaTransaction(address1, 50000, 1, true, big.NewInt(1))
+	tx2 := aaTransaction(address1, 50000, 1, true, big.NewInt(2))
+	tx3 := aaTransaction(address1, 50000, 1, true, big.NewInt(2))
 
-	tx1.Validate()
-	tx2.Validate()
-	tx3.Validate()
-
+	pool.currentState.SetCode(address1, common.FromHex(contractCode))
 	pool.currentState.AddBalance(address1, big.NewInt(1000000))
+
 	pool.reset(nil, nil)
+	pool.add(tx1, false)
+	pool.add(tx2, false)
+	pool.add(tx3, false)
 
-	pool.enqueueTx(tx1.Hash(), tx1)
-	pool.enqueueTx(tx2.Hash(), tx2)
-	pool.enqueueTx(tx3.Hash(), tx3)
-
-	if pool.queue[address1].Len() != 1 {
-		t.Error("expected len(queue) == 1, got", pool.queue[address1].Len())
+	if len(pool.queue) != 1 {
+		t.Error("expected valid txs to be 1 is", len(pool.queue))
 	}
 
-	// Need to add tests here to make sure higher gas aa transaction replace low priced
-	// if pool.queue[address1].txs.Flatten()[0].Hash() != tx1.Hash() {
-	// 	t.Error("expected higher gas price to take priority, expected hash", tx2.Hash())
-	// }
+	// higher priced transaction should replace the lower priced
+	if pool.queue[address1].txs.Flatten()[0].Hash() != tx2.Hash() {
+		t.Error("expected higher gas price transaction to be accepted")
+	}
 }
 
 func TestAAPending(t *testing.T) {
@@ -403,32 +413,112 @@ func TestAAPending(t *testing.T) {
 	pool, _ := setupTxPool()
 	defer pool.Stop()
 	key1, _ := crypto.GenerateKey()
+
 	address1 := crypto.PubkeyToAddress(key1.PublicKey)
 
-	tx1 := aaTransaction(100, address1)
-	tx2 := aaTransaction(100, address1)
-	tx3 := aaTransaction(100, address1)
+	tx1 := aaTransaction(address1, 50000, 1, true, big.NewInt(1))
+	tx2 := aaTransaction(address1, 50000, 1, true, big.NewInt(2))
+	tx3 := aaTransaction(address1, 50000, 1, true, big.NewInt(2))
 
-	tx1.Validate()
-	tx2.Validate()
-	tx3.Validate()
+	pool.currentState.SetCode(address1, common.FromHex(contractCode))
+	pool.currentState.AddBalance(address1, big.NewInt(1000000))
 
-	pool.currentState.AddBalance(address1, big.NewInt(3000))
-	pool.reset(nil, nil)
+	<-pool.requestReset(nil, nil)
 
-	pool.enqueueTx(tx1.Hash(), tx1)
-	pool.enqueueTx(tx2.Hash(), tx2)
-	pool.enqueueTx(tx3.Hash(), tx3)
-	pool.promoteExecutables([]common.Address{address1})
+	pool.add(tx1, false)
+	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, address1))
 
-	if pool.queue[address1] != nil {
-		t.Error("expected len(queue) == 0, got", pool.queue[address1].Len())
+	if len(pool.queue) > 0 {
+		t.Error("expected transaction queue to be empty. is", len(pool.queue))
+	}
+	if len(pool.pending) != 1 {
+		t.Error("expected pending to have a transaction", len(pool.pending))
 	}
 
+	pool.add(tx2, false)
+	pool.add(tx3, false)
+
+	// Should replace the current pending directly
+	if len(pool.queue) > 0 {
+		t.Error("expected transaction queue to be empty. is", len(pool.queue))
+	}
 	if len(pool.pending) != 1 {
-		t.Error("expected len(pending) == 1, got", len(pool.pending))
+		t.Error("expected pending to have a transaction", len(pool.pending))
+	}
+	if pool.pending[address1].txs.Flatten()[0].Hash() != tx2.Hash() {
+		t.Error("expected higher gas price transaction to be accepted")
 	}
 }
+
+// func TestAAQueue2(t *testing.T) {
+// 	t.Parallel()
+
+// 	pool, _ := setupTxPool()
+// 	defer pool.Stop()
+// 	key1, _ := crypto.GenerateKey()
+// 	address1 := crypto.PubkeyToAddress(key1.PublicKey)
+
+// 	tx1 := aaTransaction(address1, 10000, 1, true, big.NewInt(1))
+// 	tx2 := aaTransaction(address1, 10000, 1, true, big.NewInt(1))
+// 	tx3 := aaTransaction(address1, 10000, 1, true, big.NewInt(1))
+
+// 	tx1.Validate()
+// 	tx2.Validate()
+// 	tx3.Validate()
+
+// 	pool.currentState.AddBalance(address1, big.NewInt(1000000))
+// 	pool.currentState.SetCode(address1, common.FromHex(contractCode))
+
+// 	pool.reset(nil, nil)
+
+// 	pool.enqueueTx(tx1.Hash(), tx1)
+// 	pool.enqueueTx(tx2.Hash(), tx2)
+// 	pool.enqueueTx(tx3.Hash(), tx3)
+
+// 	if pool.queue[address1].Len() != 1 {
+// 		t.Error("expected len(queue) == 1, got", pool.queue[address1].Len())
+// 	}
+
+// Need to add tests here to make sure higher gas aa transaction replace low priced
+// if pool.queue[address1].txs.Flatten()[0].Hash() != tx1.Hash() {
+// 	t.Error("expected higher gas price to take priority, expected hash", tx2.Hash())
+// }
+// }
+
+// func TestAAPending(t *testing.T) {
+// 	t.Parallel()
+
+// 	pool, _ := setupTxPool()
+// 	defer pool.Stop()
+// 	key1, _ := crypto.GenerateKey()
+// 	address1 := crypto.PubkeyToAddress(key1.PublicKey)
+
+// 	tx1 := aaTransaction(address1, 10000, 1, true, big.NewInt(1))
+// 	tx2 := aaTransaction(address1, 10000, 1, true, big.NewInt(1))
+// 	tx3 := aaTransaction(address1, 10000, 1, true, big.NewInt(1))
+
+// 	tx1.Validate()
+// 	tx2.Validate()
+// 	tx3.Validate()
+
+// 	pool.currentState.AddBalance(address1, big.NewInt(3000))
+// 	pool.currentState.SetCode(address1, common.FromHex(contractCode))
+
+// 	pool.reset(nil, nil)
+
+// 	pool.enqueueTx(tx1.Hash(), tx1)
+// 	pool.enqueueTx(tx2.Hash(), tx2)
+// 	pool.enqueueTx(tx3.Hash(), tx3)
+// 	pool.promoteExecutables([]common.Address{address1})
+
+// 	if pool.queue[address1] != nil {
+// 		t.Error("expected len(queue) == 0, got", pool.queue[address1].Len())
+// 	}
+
+// 	if len(pool.pending) != 1 {
+// 		t.Error("expected len(pending) == 1, got", len(pool.pending))
+// 	}
+// }
 
 func TestTransactionNegativeValue(t *testing.T) {
 	t.Parallel()
