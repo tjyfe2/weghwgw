@@ -343,7 +343,8 @@ func TestAAQueue(t *testing.T) {
 	beforeLimit := config.AAGasLimit
 	config.AAGasLimit = 400000
 
-	address1 := crypto.PubkeyToAddress(key1.PublicKey)
+	eoa := crypto.PubkeyToAddress(key1.PublicKey)
+	address1 := crypto.CreateAddress(eoa, 0)
 
 	tx1 := aaTransaction(address1, 50000, 1, false, big.NewInt(1))
 	tx2 := aaTransaction(address1, 400000, 16000, true, big.NewInt(1))
@@ -377,7 +378,7 @@ func TestAAQueue(t *testing.T) {
 	if len(pool.queue) > 0 {
 		t.Error("expected transaction queue to be empty. is", len(pool.queue))
 	}
-	if len(pool.pending) > 1 {
+	if len(pool.pending) != 1 {
 		t.Error("expected pending to have a transaction", len(pool.pending))
 	}
 
@@ -391,7 +392,8 @@ func TestAAQueue2(t *testing.T) {
 	defer pool.Stop()
 	key1, _ := crypto.GenerateKey()
 
-	address1 := crypto.PubkeyToAddress(key1.PublicKey)
+	eoa := crypto.PubkeyToAddress(key1.PublicKey)
+	address1 := crypto.CreateAddress(eoa, 0)
 
 	tx1 := aaTransaction(address1, 50000, 1, true, big.NewInt(1))
 	tx2 := aaTransaction(address1, 50000, 1, true, big.NewInt(2))
@@ -422,7 +424,8 @@ func TestAAPending(t *testing.T) {
 	defer pool.Stop()
 	key1, _ := crypto.GenerateKey()
 
-	address1 := crypto.PubkeyToAddress(key1.PublicKey)
+	eoa := crypto.PubkeyToAddress(key1.PublicKey)
+	address1 := crypto.CreateAddress(eoa, 0)
 
 	tx1 := aaTransaction(address1, 50000, 1, true, big.NewInt(1))
 	tx2 := aaTransaction(address1, 50000, 1, true, big.NewInt(2))

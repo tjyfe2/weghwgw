@@ -553,7 +553,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	if tx.IsAA() {
-		if tx.Value().Sign() > 0 {
+		if tx.Value().Sign() != 0 {
 			return ErrInvalidAAData
 		}
 

@@ -275,12 +275,11 @@ func (tx *Transaction) WithAASignature() *Transaction {
 
 // Cost returns amount + gasprice * gaslimit.
 func (tx *Transaction) Cost() *big.Int {
+	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.data.GasLimit))
 	if tx.IsAA() {
-		var price = tx.GasPrice()
-		return new(big.Int).Mul(price, new(big.Int).SetUint64(tx.data.GasLimit))
+		return total
 	}
 
-	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
 	total.Add(total, tx.data.Amount)
 	return total
 }
