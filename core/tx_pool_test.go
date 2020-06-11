@@ -353,6 +353,7 @@ func TestAAQueue(t *testing.T) {
 
 	pool.currentState.SetCode(address1, common.FromHex(contractCode))
 	pool.currentState.AddBalance(address1, big.NewInt(1000000))
+	pool.currentState.SetNonce(address1, 1)
 
 	<-pool.requestReset(nil, nil)
 	pool.add(tx1, false)
@@ -401,6 +402,7 @@ func TestAAQueue2(t *testing.T) {
 
 	pool.currentState.SetCode(address1, common.FromHex(contractCode))
 	pool.currentState.AddBalance(address1, big.NewInt(1000000))
+	pool.currentState.SetNonce(address1, 1)
 
 	pool.reset(nil, nil)
 	pool.add(tx1, false)
@@ -433,6 +435,7 @@ func TestAAPending(t *testing.T) {
 
 	pool.currentState.SetCode(address1, common.FromHex(contractCode))
 	pool.currentState.AddBalance(address1, big.NewInt(1000000))
+	pool.currentState.SetNonce(address1, 1)
 
 	<-pool.requestReset(nil, nil)
 
