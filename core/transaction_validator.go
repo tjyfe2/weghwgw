@@ -18,13 +18,14 @@ package core
 
 import (
 	"errors"
+
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 var (
-	ErrIncorrectAAConfig    = errors.New("incorrect AA config for EVM")
-	ErrMalformedTransaction = errors.New("AA transaction malformed")
+	ErrIncorrectAAConfig      = errors.New("incorrect AA config for EVM")
+	ErrMalformedAATransaction = errors.New("AA transaction malformed")
 )
 
 func Validate(tx *types.Transaction, s types.Signer, evm *vm.EVM, gasLimit uint64) error {
@@ -39,7 +40,7 @@ func Validate(tx *types.Transaction, s types.Signer, evm *vm.EVM, gasLimit uint6
 	if err != nil {
 		return err
 	} else if !msg.IsAA() {
-		return ErrMalformedTransaction
+		return ErrMalformedAATransaction
 	}
 	msg.SetGas(gasLimit)
 	gp := new(GasPool).AddGas(gasLimit)

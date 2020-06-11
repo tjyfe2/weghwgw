@@ -173,12 +173,27 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Payload) }
-func (tx *Transaction) Gas() uint64        { return tx.data.GasLimit }
-func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Price) }
-func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amount) }
-func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
-func (tx *Transaction) CheckNonce() bool   { return true }
+func (tx *Transaction) Data() []byte { return common.CopyBytes(tx.data.Payload) }
+func (tx *Transaction) Gas() uint64  { return tx.data.GasLimit }
+func (tx *Transaction) GasPrice() *big.Int {
+	if tx.IsAA() {
+		if price := tx.price.Load(); price != nil {
+			var current_price *big.Int = price.(*big.Int)
+			return current_price
+		}
+
+		return nil
+	}
+
+	return new(big.Int).Set(tx.data.Price)
+}
+
+func (tx *Transaction) RawGasPrice() *big.Int { return tx.data.Price }
+
+func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.data.Amount) }
+func (tx *Transaction) Nonce() uint64   { return tx.data.AccountNonce }
+
+func (tx *Transaction) CheckNonce() bool { return true }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
@@ -260,7 +275,11 @@ func (tx *Transaction) WithAASignature() *Transaction {
 
 // Cost returns amount + gasprice * gaslimit.
 func (tx *Transaction) Cost() *big.Int {
-	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
+	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.data.GasLimit))
+	if tx.IsAA() {
+		return total
+	}
+
 	total.Add(total, tx.data.Amount)
 	return total
 }
@@ -414,7 +433,7 @@ type Message struct {
 	isAA       bool
 }
 
-var AADummyMessage = Message{from: common.NewEntryPointAddress(), gasPrice: big.NewInt(0)}
+var AAEntryMessage = Message{from: common.NewEntryPointAddress(), gasPrice: big.NewInt(0)}
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
 	isAA := from.IsEntryPoint()

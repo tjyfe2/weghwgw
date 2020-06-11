@@ -65,7 +65,7 @@ func setupBlockchain(blockGasLimit uint64) *BlockChain {
 func testValidate(blockchain *BlockChain, statedb *state.StateDB, transaction *types.Transaction, validationGasLimit uint64, expectedErr error, t *testing.T) {
 	var (
 		snapshotRevisionId = statedb.Snapshot()
-		context            = NewEVMContext(types.AADummyMessage, blockchain.CurrentHeader(), blockchain, &common.Address{})
+		context            = NewEVMContext(types.AAEntryMessage, blockchain.CurrentHeader(), blockchain, &common.Address{})
 		vmenv              = vm.NewEVM(context, statedb, blockchain.Config(), vm.Config{PaygasMode: vm.PaygasHalt})
 		err                = Validate(transaction, types.HomesteadSigner{}, vmenv, validationGasLimit)
 	)
@@ -136,7 +136,7 @@ func TestInvalidEVMConfig(t *testing.T) {
 		blockchain = setupBlockchain(10000000)
 		statedb, _ = blockchain.State()
 
-		context = NewEVMContext(types.AADummyMessage, blockchain.CurrentHeader(), blockchain, &common.Address{})
+		context = NewEVMContext(types.AAEntryMessage, blockchain.CurrentHeader(), blockchain, &common.Address{})
 		vmenv   = vm.NewEVM(context, statedb, blockchain.Config(), vm.Config{})
 
 		tx          = &types.Transaction{}
@@ -153,13 +153,13 @@ func TestMalformedTransaction(t *testing.T) {
 		blockchain = setupBlockchain(10000000)
 		statedb, _ = blockchain.State()
 
-		context = NewEVMContext(types.AADummyMessage, blockchain.CurrentHeader(), blockchain, &common.Address{})
+		context = NewEVMContext(types.AAEntryMessage, blockchain.CurrentHeader(), blockchain, &common.Address{})
 		vmenv   = vm.NewEVM(context, statedb, blockchain.Config(), vm.Config{PaygasMode: vm.PaygasHalt})
 
 		key, _      = crypto.GenerateKey()
 		tx          = pricedTransaction(0, 100000, big.NewInt(0), key)
 		err         = Validate(tx, types.HomesteadSigner{}, vmenv, 400000)
-		expectedErr = ErrMalformedTransaction
+		expectedErr = ErrMalformedAATransaction
 	)
 	if err != expectedErr {
 		t.Error("\n\texpected:", expectedErr, "\n\tgot:", err)

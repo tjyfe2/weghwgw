@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -56,8 +58,16 @@ func (bc *testBlockChain) CurrentBlock() *types.Block {
 	}, nil, nil, nil)
 }
 
+func (bc *testBlockChain) Config() *params.ChainConfig { return params.AllEthashProtocolChanges }
+
+func (bc *testBlockChain) Engine() consensus.Engine { return ethash.NewFaker() }
+
 func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return bc.CurrentBlock()
+}
+
+func (bc *testBlockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
+	return bc.CurrentBlock().Header()
 }
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
@@ -320,6 +330,134 @@ func TestTransactionQueue2(t *testing.T) {
 	}
 	if pool.queue[from].Len() != 2 {
 		t.Error("expected len(queue) == 2, got", pool.queue[from].Len())
+	}
+}
+
+func TestAAQueue(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupTxPool()
+	defer pool.Stop()
+	key1, _ := crypto.GenerateKey()
+	config := testTxPoolConfig
+	beforeLimit := config.AAGasLimit
+	config.AAGasLimit = 400000
+
+	eoa := crypto.PubkeyToAddress(key1.PublicKey)
+	address1 := crypto.CreateAddress(eoa, 0)
+
+	tx1 := aaTransaction(address1, 50000, 1, false, big.NewInt(1))
+	tx2 := aaTransaction(address1, 400000, 16000, true, big.NewInt(1))
+	tx3 := aaTransaction(address1, 50000, 1, true, big.NewInt(1))
+	tx4 := aaTransaction(address1, 50000, 1, true, big.NewInt(2))
+
+	pool.currentState.SetCode(address1, common.FromHex(contractCode))
+	pool.currentState.AddBalance(address1, big.NewInt(1000000))
+
+	<-pool.requestReset(nil, nil)
+	pool.add(tx1, false)
+	pool.add(tx2, false)
+
+	// any aa validation error (in this case, does not call paygas)
+	// should not progress the tx
+	// Also if gas required is greater than the config max
+	if len(pool.queue) != 0 {
+		t.Error("expected valid txs to be 0 is", len(pool.queue))
+	}
+
+	pool.add(tx3, false)
+
+	if len(pool.queue) != 1 {
+		t.Error("expected valid txs to be 1 is", len(pool.queue))
+	}
+
+	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, address1))
+
+	pool.add(tx4, false)
+
+	if len(pool.queue) > 0 {
+		t.Error("expected transaction queue to be empty. is", len(pool.queue))
+	}
+	if len(pool.pending) != 1 {
+		t.Error("expected pending to have a transaction", len(pool.pending))
+	}
+
+	config.AAGasLimit = beforeLimit
+}
+
+func TestAAQueue2(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupTxPool()
+	defer pool.Stop()
+	key1, _ := crypto.GenerateKey()
+
+	eoa := crypto.PubkeyToAddress(key1.PublicKey)
+	address1 := crypto.CreateAddress(eoa, 0)
+
+	tx1 := aaTransaction(address1, 50000, 1, true, big.NewInt(1))
+	tx2 := aaTransaction(address1, 50000, 1, true, big.NewInt(2))
+	tx3 := aaTransaction(address1, 50000, 1, true, big.NewInt(2))
+
+	pool.currentState.SetCode(address1, common.FromHex(contractCode))
+	pool.currentState.AddBalance(address1, big.NewInt(1000000))
+
+	pool.reset(nil, nil)
+	pool.add(tx1, false)
+	pool.add(tx2, false)
+	pool.add(tx3, false)
+
+	if len(pool.queue) != 1 {
+		t.Error("expected valid txs to be 1 is", len(pool.queue))
+	}
+
+	// higher priced transaction should replace the lower priced
+	if pool.queue[address1].txs.Flatten()[0].Hash() != tx2.Hash() {
+		t.Error("expected higher gas price transaction to be accepted")
+	}
+}
+
+func TestAAPending(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupTxPool()
+	defer pool.Stop()
+	key1, _ := crypto.GenerateKey()
+
+	eoa := crypto.PubkeyToAddress(key1.PublicKey)
+	address1 := crypto.CreateAddress(eoa, 0)
+
+	tx1 := aaTransaction(address1, 50000, 1, true, big.NewInt(1))
+	tx2 := aaTransaction(address1, 50000, 1, true, big.NewInt(2))
+	tx3 := aaTransaction(address1, 50000, 1, true, big.NewInt(2))
+
+	pool.currentState.SetCode(address1, common.FromHex(contractCode))
+	pool.currentState.AddBalance(address1, big.NewInt(1000000))
+
+	<-pool.requestReset(nil, nil)
+
+	pool.add(tx1, false)
+	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, address1))
+
+	if len(pool.queue) > 0 {
+		t.Error("expected transaction queue to be empty. is", len(pool.queue))
+	}
+	if len(pool.pending) != 1 {
+		t.Error("expected pending to have a transaction", len(pool.pending))
+	}
+
+	pool.add(tx2, false)
+	pool.add(tx3, false)
+
+	// Should replace the current pending directly
+	if len(pool.queue) > 0 {
+		t.Error("expected transaction queue to be empty. is", len(pool.queue))
+	}
+	if len(pool.pending) != 1 {
+		t.Error("expected pending to have a transaction", len(pool.pending))
+	}
+	if pool.pending[address1].txs.Flatten()[0].Hash() != tx2.Hash() {
+		t.Error("expected higher gas price transaction to be accepted")
 	}
 }
 
