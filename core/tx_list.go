@@ -277,6 +277,10 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 // provided threshold. Every removed transaction is returned for any post-removal
 // maintenance.
 func (l *txList) Forward(threshold uint64) types.Transactions {
+	if l.isAA {
+		return types.Transactions{}
+	}
+
 	return l.txs.Forward(threshold)
 }
 
