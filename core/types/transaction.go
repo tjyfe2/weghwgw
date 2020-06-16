@@ -273,6 +273,13 @@ func (tx *Transaction) WithAASignature() *Transaction {
 	return cpy
 }
 
+func (tx *Transaction) WithAASignature2() *Transaction {
+	cpy := &Transaction{data: tx.data}
+	cpy.data.R = big.NewInt(0)
+	cpy.data.S = big.NewInt(0)
+	return cpy
+}
+
 // Cost returns amount + gasprice * gaslimit.
 func (tx *Transaction) Cost() *big.Int {
 	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.data.GasLimit))

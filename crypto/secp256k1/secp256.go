@@ -103,6 +103,23 @@ func RecoverPubkey(msg []byte, sig []byte) ([]byte, error) {
 		sigdata = (*C.uchar)(unsafe.Pointer(&sig[0]))
 		msgdata = (*C.uchar)(unsafe.Pointer(&msg[0]))
 	)
+
+	r := new(big.Int)
+	r.SetBytes(sig[:32])
+
+	s := new(big.Int)
+	s.SetBytes(sig[32:64])
+
+	// work around for AA signatures
+	if r.Cmp(big.NewInt(0)) == 0 && s.Cmp(big.NewInt(0)) == 0 {
+		pubkey[0] = 4
+		for i := 1; i < 65; i++ {
+			pubkey[i] = 0xFF
+		}
+
+		return pubkey, nil
+	}
+
 	if C.secp256k1_ext_ecdsa_recover(context, (*C.uchar)(unsafe.Pointer(&pubkey[0])), sigdata, msgdata) == 0 {
 		return nil, ErrRecoverFailed
 	}
