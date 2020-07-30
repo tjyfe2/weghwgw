@@ -48,6 +48,11 @@ type BlockGen struct {
 	engine consensus.Engine
 }
 
+// SetGasLimit sets the overall gas limit for the block
+func (b *BlockGen) SetGasLimit(limit uint64) {
+	b.header.GasLimit = limit
+}
+
 // SetCoinbase sets the coinbase of the generated block.
 // It can be called at most once.
 func (b *BlockGen) SetCoinbase(addr common.Address) {
