@@ -128,7 +128,7 @@ func (sdb *builder) buildStateTrie(it trie.NodeIterator) ([]StateNode, error) {
 			return nil, fmt.Errorf("unexpected node type %s", ty)
 		}
 	}
-	return stateNodes, nil
+	return stateNodes, it.Error()
 }
 
 // BuildStateDiffObject builds a statediff object from two blocks and the provided parameters
@@ -301,7 +301,7 @@ func (sdb *builder) createdAndUpdatedState(a, b trie.NodeIterator, watchedAddres
 		// add both intermediate and leaf node paths to the list of diffPathsAtB
 		diffPathsAtB[common.Bytes2Hex(nodePath)] = true
 	}
-	return diffAcountsAtB, diffPathsAtB, nil
+	return diffAcountsAtB, diffPathsAtB, it.Error()
 }
 
 // createdAndUpdatedStateWithIntermediateNodes returns
@@ -368,7 +368,7 @@ func (sdb *builder) createdAndUpdatedStateWithIntermediateNodes(a, b trie.NodeIt
 		// add both intermediate and leaf node paths to the list of diffPathsAtB
 		diffPathsAtB[common.Bytes2Hex(nodePath)] = true
 	}
-	return createdOrUpdatedIntermediateNodes, diffAcountsAtB, diffPathsAtB, nil
+	return createdOrUpdatedIntermediateNodes, diffAcountsAtB, diffPathsAtB, it.Error()
 }
 
 // deletedOrUpdatedState returns a slice of all the pathes that are emptied at B
@@ -433,7 +433,7 @@ func (sdb *builder) deletedOrUpdatedState(a, b trie.NodeIterator, diffPathsAtB m
 			return nil, nil, fmt.Errorf("unexpected node type %s", ty)
 		}
 	}
-	return emptiedPaths, diffAccountAtA, nil
+	return emptiedPaths, diffAccountAtA, it.Error()
 }
 
 // buildAccountUpdates uses the account diffs maps for A => B and B => A and the known intersection of their leafkeys
@@ -559,7 +559,7 @@ func (sdb *builder) buildStorageNodesFromTrie(it trie.NodeIterator, watchedStora
 			return nil, fmt.Errorf("unexpected node type %s", ty)
 		}
 	}
-	return storageDiffs, nil
+	return storageDiffs, it.Error()
 }
 
 // buildStorageNodesIncremental builds the storage diff node objects for all nodes that exist in a different state at B than A
@@ -641,7 +641,7 @@ func (sdb *builder) createdAndUpdatedStorage(a, b trie.NodeIterator, watchedKeys
 		}
 		diffPathsAtB[common.Bytes2Hex(nodePath)] = true
 	}
-	return createdOrUpdatedStorage, diffPathsAtB, nil
+	return createdOrUpdatedStorage, diffPathsAtB, it.Error()
 }
 
 func (sdb *builder) deletedOrUpdatedStorage(a, b trie.NodeIterator, diffPathsAtB map[string]bool, watchedKeys []common.Hash, intermediateNodes bool) ([]StorageNode, error) {
@@ -700,7 +700,7 @@ func (sdb *builder) deletedOrUpdatedStorage(a, b trie.NodeIterator, diffPathsAtB
 			return nil, fmt.Errorf("unexpected node type %s", ty)
 		}
 	}
-	return deletedStorage, nil
+	return deletedStorage, it.Error()
 }
 
 // isWatchedAddress is used to check if a state account corresponds to one of the addresses the builder is configured to watch

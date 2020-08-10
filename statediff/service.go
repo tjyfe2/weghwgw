@@ -44,6 +44,7 @@ type blockChain interface {
 	GetBlockByNumber(number uint64) *types.Block
 	GetReceiptsByHash(hash common.Hash) types.Receipts
 	GetTdByHash(hash common.Hash) *big.Int
+	UnlockTrie(root common.Hash)
 }
 
 // IService is the state-diffing service interface
@@ -53,7 +54,7 @@ type IService interface {
 	// Main event loop for processing state diffs
 	Loop(chainEventCh chan core.ChainEvent)
 	// Method to subscribe to receive state diff processing output
-	Subscribe(id rpc.ID, sub chan<- Payload, quitChan chan<- bool, params Params)
+	Subscribe(id rpc.ID, sub chan<- Payload, quitChanogr chan<- bool, params Params)
 	// Method to unsubscribe from state diff processing
 	Unsubscribe(id rpc.ID) error
 	// Method to get state diff object at specific block
@@ -165,8 +166,7 @@ func (sds *Service) streamStateDiff(currentBlock *types.Block, parentRoot common
 		// create payload for this subscription type
 		payload, err := sds.processStateDiff(currentBlock, parentRoot, params)
 		if err != nil {
-			log.Error(fmt.Sprintf("statediff processing error for subscriptions with parameters: %+v", params))
-			sds.closeType(ty)
+			log.Error(fmt.Sprintf("statediff processing error a blockheight %d for subscriptions with parameters: %+v err: %s", currentBlock.Number().Uint64(), params, err.Error()))
 			continue
 		}
 		for id, sub := range subs {
@@ -201,6 +201,8 @@ func (sds *Service) processStateDiff(currentBlock *types.Block, parentRoot commo
 		BlockHash:    currentBlock.Hash(),
 		BlockNumber:  currentBlock.Number(),
 	}, params)
+	// allow dereferencing of parent, keep current locked as it should be the next parent
+	sds.BlockChain.UnlockTrie(parentRoot)
 	if err != nil {
 		return nil, err
 	}

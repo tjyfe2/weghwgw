@@ -43,7 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -115,6 +115,7 @@ type CacheConfig struct {
 	TrieDirtyLimit      int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
 	TrieDirtyDisabled   bool          // Whether to disable trie write caching and GC altogether (archive node)
 	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
+	StateDiffing        bool          // Whether or not the statediffing service is running
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -177,6 +178,10 @@ type BlockChain struct {
 	badBlocks       *lru.Cache                     // Bad block cache
 	shouldPreserve  func(*types.Block) bool        // Function used to determine whether should preserve the given block.
 	terminateInsert func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
+
+	// Locked roots and their mutex
+	trieLock    sync.Mutex
+	lockedRoots map[common.Hash]bool
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -214,6 +219,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:         engine,
 		vmConfig:       vmConfig,
 		badBlocks:      badBlocks,
+		lockedRoots:    make(map[common.Hash]bool),
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -857,7 +863,10 @@ func (bc *BlockChain) Stop() {
 			}
 		}
 		for !bc.triegc.Empty() {
-			triedb.Dereference(bc.triegc.PopItem().(common.Hash))
+			pruneRoot := bc.triegc.PopItem().(common.Hash)
+			if !bc.TrieLocked(pruneRoot) {
+				triedb.Dereference(pruneRoot)
+			}
 		}
 		if size, _ := triedb.Size(); size != 0 {
 			log.Error("Dangling trie nodes after full cleanup")
@@ -1342,6 +1351,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
 		bc.triegc.Push(root, -int64(block.NumberU64()))
 
+		// If we are statediffing, lock the trie until the statediffing service is done using it
+		if bc.cacheConfig.StateDiffing {
+			bc.LockTrie(root)
+		}
+
 		if current := block.NumberU64(); current > TriesInMemory {
 			// If we exceeded our memory allowance, flush matured singleton nodes to disk
 			var (
@@ -1380,8 +1394,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					bc.triegc.Push(root, number)
 					break
 				}
-				log.Debug("Dereferencing", "root", root.(common.Hash).Hex())
-				triedb.Dereference(root.(common.Hash))
+				pruneRoot := root.(common.Hash)
+				if !bc.TrieLocked(pruneRoot) {
+					log.Debug("Dereferencing", "root", root.(common.Hash).Hex())
+					triedb.Dereference(pruneRoot)
+				}
 			}
 		}
 	}
@@ -2253,4 +2270,31 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
+}
+
+// TrieLocked returns whether the trie associated with the provided root is locked for use
+func (bc *BlockChain) TrieLocked(root common.Hash) bool {
+	bc.trieLock.Lock()
+	locked, ok := bc.lockedRoots[root]
+	bc.trieLock.Unlock()
+	if !ok {
+		return false
+	}
+	return locked
+}
+
+// LockTrie prevents dereferencing of the provided root
+func (bc *BlockChain) LockTrie(root common.Hash) {
+	bc.trieLock.Lock()
+	bc.lockedRoots[root] = true
+	bc.trieLock.Unlock()
+	return
+}
+
+// UnlockTrie allows dereferencing of the provided root- provided it was previously locked
+func (bc *BlockChain) UnlockTrie(root common.Hash) {
+	bc.trieLock.Lock()
+	bc.lockedRoots[root] = false
+	bc.trieLock.Unlock()
+	return
 }
