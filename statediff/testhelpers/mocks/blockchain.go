@@ -124,3 +124,5 @@ func (blockChain *BlockChain) SetTdByHash(hash common.Hash, td *big.Int) {
 	}
 	blockChain.TDByHash[hash] = td
 }
+
+func (blockChain *BlockChain) UnlockTrie(root common.Hash) {}

@@ -43,7 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -2288,7 +2288,6 @@ func (bc *BlockChain) LockTrie(root common.Hash) {
 	bc.trieLock.Lock()
 	bc.lockedRoots[root] = true
 	bc.trieLock.Unlock()
-	return
 }
 
 // UnlockTrie allows dereferencing of the provided root- provided it was previously locked
@@ -2296,5 +2295,4 @@ func (bc *BlockChain) UnlockTrie(root common.Hash) {
 	bc.trieLock.Lock()
 	bc.lockedRoots[root] = false
 	bc.trieLock.Unlock()
-	return
 }
