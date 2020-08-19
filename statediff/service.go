@@ -23,11 +23,10 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/crypto"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -210,6 +209,7 @@ func (sds *Service) processStateDiff(currentBlock *types.Block, parentRoot commo
 	if err != nil {
 		return nil, err
 	}
+	log.Info(fmt.Sprintf("state diff object at block %d is %d bytes in length", currentBlock.Number().Uint64(), len(stateDiffRlp)))
 	return sds.newPayload(stateDiffRlp, currentBlock, params)
 }
 
@@ -255,6 +255,7 @@ func (sds *Service) processStateTrie(block *types.Block, params Params) (*Payloa
 	if err != nil {
 		return nil, err
 	}
+	log.Info(fmt.Sprintf("state trie object at block %d is %d bytes in length", block.Number().Uint64(), len(stateTrieRlp)))
 	return sds.newPayload(stateTrieRlp, block, params)
 }
 
