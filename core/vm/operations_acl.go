@@ -18,11 +18,11 @@ import (
 // rules stay the same as in EIP 1283, only those two constants change.
 //
 // 0. If *gasleft* is less than or equal to 2300, fail the current call.
+//         -- the point below is modified by ACL EIP: 800 to 100--
 // 1. If current value equals new value (this is a no-op), SSTORE_NOOP_GAS gas is deducted.
 // 2. If current value does not equal new value:
 //   2.1. If original value equals current value (this storage slot has not been changed by the current execution context):
 //     2.1.1. If original value is 0, SSTORE_INIT_GAS gas is deducted.
-//         -- the point below is modified by --
 //     2.1.2. Otherwise, SSTORE_CLEAN_GAS gas is deducted. If new value is 0, add SSTORE_CLEAR_REFUND to refund counter.
 //   2.2. If original value does not equal current value (this storage slot is dirty), SSTORE_DIRTY_GAS gas is deducted. Apply both of the following clauses:
 //     2.2.1. If original value is not 0:
@@ -30,7 +30,6 @@ import (
 //       2.2.1.2. If new value is 0 (also means that current value is not 0), add SSTORE_CLEAR_REFUND gas to refund counter.
 //     2.2.2. If original value equals new value (this storage slot is reset):
 //       2.2.2.1. If original value is 0, add SSTORE_INIT_REFUND to refund counter.
-//         -- the point below is modified by --
 //       2.2.2.2. Otherwise, add SSTORE_CLEAN_REFUND gas to refund counter
 func gasSStoreEipXXX(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	// If we fail the minimum gas availability invariant, fail (0)
@@ -54,7 +53,8 @@ func gasSStoreEipXXX(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	value := common.Hash(y.Bytes32())
 
 	if current == value { // noop (1)
-		return cost + params.SstoreNoopGasEIP2200, nil
+		//return cost + params.SstoreNoopGasEIP2200, nil
+		return cost + 100, nil // SLOAD_GAS
 	}
 	original := evm.StateDB.GetCommittedState(contract.Address(), common.Hash(x.Bytes32()))
 	if original == current {
@@ -64,8 +64,8 @@ func gasSStoreEipXXX(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		if value == (common.Hash{}) { // delete slot (2.1.2b)
 			evm.StateDB.AddRefund(params.SstoreClearRefundEIP2200)
 		}
-		return cost + 3000, nil // write existing slot (2.1.2)
 		//return params.SstoreCleanGasEIP2200, nil
+		return cost + 3000, nil // write existing slot (2.1.2)
 	}
 	if original != (common.Hash{}) {
 		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
@@ -78,13 +78,11 @@ func gasSStoreEipXXX(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
 			evm.StateDB.AddRefund(params.SstoreInitRefundEIP2200)
 		} else { // reset to original existing slot (2.2.2.2)
-			// TODO! This now uses 2200, (SstoreCleanRefundEIP2200 - 2K),
-			// but the spec says 2800, as it was based off 1283 value 4800
-			evm.StateDB.AddRefund(2200)
-			//evm.StateDB.AddRefund(params.SstoreCleanRefundEIP2200)
+			evm.StateDB.AddRefund(params.SstoreCleanRefundEIP2200)
 		}
 	}
-	return cost + params.SstoreDirtyGasEIP2200, nil // dirty update (2.2)
+	//return cost + params.SstoreDirtyGasEIP2200, nil // dirty update (2.2)
+	return cost + 100, nil // dirty update (2.2)
 }
 
 // gasSloadEipXXX calculates dynamic gas for SLOAD according to EIP-XXX
