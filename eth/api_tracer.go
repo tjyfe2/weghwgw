@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/params"
 	"io/ioutil"
 	"os"
 	"runtime"
@@ -564,15 +565,39 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 		signer      = types.MakeSigner(api.eth.blockchain.Config(), block.Number())
 		dumps       []string
 		chainConfig = api.eth.blockchain.Config()
+		canon       = true
 	)
 	// Check if there are any overrides: the caller may wish to enable a future
 	// fork when executing this block. Note, such overrides are only applicable to the
 	// actual specified block, not any preceding blocks that we have to go through
 	// in order to obtain the state.
 	// Therefore, it's perfectly valid to specify `"futureForkBlock": 0`, to enable `futureFork`
-	if config.Overrides != nil {
+
+	if config != nil && config.Overrides != nil {
+		// Copy the config, to not screw up the main config
+		chainConfigCopy := &params.ChainConfig{
+			ChainID:             chainConfig.ChainID,
+			HomesteadBlock:      chainConfig.HomesteadBlock,
+			DAOForkBlock:        chainConfig.DAOForkBlock,
+			DAOForkSupport:      chainConfig.DAOForkSupport,
+			EIP150Block:         chainConfig.EIP150Block,
+			EIP150Hash:          chainConfig.EIP150Hash,
+			EIP155Block:         chainConfig.EIP150Block,
+			EIP158Block:         chainConfig.EIP158Block,
+			ByzantiumBlock:      chainConfig.ByzantiumBlock,
+			ConstantinopleBlock: chainConfig.ConstantinopleBlock,
+			PetersburgBlock:     chainConfig.PetersburgBlock,
+			IstanbulBlock:       chainConfig.IstanbulBlock,
+			MuirGlacierBlock:    chainConfig.MuirGlacierBlock,
+			YoloV2Block:         chainConfig.YoloV2Block,
+			EWASMBlock:          chainConfig.EWASMBlock,
+			Ethash:              chainConfig.Ethash,
+			Clique:              chainConfig.Clique,
+		}
+		chainConfig = chainConfigCopy
 		if yolov2 := config.Overrides.YoloV2Block; yolov2 != nil {
 			chainConfig.YoloV2Block = yolov2
+			canon = false
 		}
 		// todo add more if we want them
 	}
@@ -591,7 +616,9 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 		if tx.Hash() == txHash || txHash == (common.Hash{}) {
 			// Generate a unique temporary file to dump it into
 			prefix := fmt.Sprintf("block_%#x-%d-%#x-", block.Hash().Bytes()[:4], i, tx.Hash().Bytes()[:4])
-
+			if !canon {
+				prefix = fmt.Sprintf("%valt-", prefix)
+			}
 			dump, err = ioutil.TempFile(os.TempDir(), prefix)
 			if err != nil {
 				return nil, err
