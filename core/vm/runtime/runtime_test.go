@@ -753,22 +753,45 @@ func TestEip9999Cases(t *testing.T) {
 
 	{ // First eip testcase
 		code := []byte{
-			byte(vm.PUSH1), 4,
-			byte(vm.EXTCODEHASH),byte(vm.POP),
-			byte(vm.PUSH1), 4,
-			byte(vm.EXTCODEHASH),byte(vm.POP),
-			byte(vm.PUSH1), 0xff,
-			byte(vm.EXTCODESIZE),byte(vm.POP),
-			byte(vm.PUSH1), 0xff,
-			byte(vm.EXTCODESIZE),byte(vm.POP),
-			byte(vm.PUSH1), 0xff,
-			byte(vm.BALANCE),byte(vm.POP),
-			byte(vm.PUSH1), 0xfe,
-			byte(vm.BALANCE),byte(vm.POP),
-			byte(vm.PUSH1), 0xfe,
-			byte(vm.BALANCE),byte(vm.POP),
+			// Three checks against a precompile
+			byte(vm.PUSH1), 1, byte(vm.EXTCODEHASH), byte(vm.POP),
+			byte(vm.PUSH1), 2, byte(vm.EXTCODESIZE), byte(vm.POP),
+			byte(vm.PUSH1), 3, byte(vm.BALANCE), byte(vm.POP),
+			// Three checks against a non-precompile
+			byte(vm.PUSH1), 0xf1, byte(vm.EXTCODEHASH), byte(vm.POP),
+			byte(vm.PUSH1), 0xf2, byte(vm.EXTCODESIZE), byte(vm.POP),
+			byte(vm.PUSH1), 0xf3, byte(vm.BALANCE), byte(vm.POP),
+			// Same three checks (should be cheaper)
+			byte(vm.PUSH1), 0xf2, byte(vm.EXTCODEHASH), byte(vm.POP),
+			byte(vm.PUSH1), 0xf3, byte(vm.EXTCODESIZE), byte(vm.POP),
+			byte(vm.PUSH1), 0xf1, byte(vm.BALANCE), byte(vm.POP),
+			// Check the origin, and the 'this'
+			byte(vm.ORIGIN), byte(vm.BALANCE), byte(vm.POP),
+			byte(vm.ADDRESS), byte(vm.BALANCE), byte(vm.POP),
+
 			byte(vm.STOP),
 		}
-		prettyPrint("This checks `EXTCODEHASH` of a precompile, which should be `100`, and later checks the `EXTCODSIZE`/`BALANCE` of some non-precompiles.", code)
+		prettyPrint("This checks `EXT`(codehash,codesize,balance) of precompiles, which should be `100`, "+
+			"and later checks the same operations twice against some non-precompiles. "+
+			"Those are cheaper second time they are accessed. Lastly, it checks the `BALANCE` of `origin` and `this`.", code)
 	}
+
+	{ // EXTCODECOPY
+		code := []byte{
+			// extcodecopy( 0xff,0,0,0,0)
+			byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, //length, codeoffset, memoffset
+			byte(vm.PUSH1), 0xff, byte(vm.EXTCODECOPY),
+			// extcodecopy( 0xff,0,0,0,0)
+			byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, //length, codeoffset, memoffset
+			byte(vm.PUSH1), 0xff, byte(vm.EXTCODECOPY),
+			// extcodecopy( this,0,0,0,0)
+			byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, byte(vm.PUSH1), 0x00, //length, codeoffset, memoffset
+			byte(vm.ADDRESS), byte(vm.EXTCODECOPY),
+
+			byte(vm.STOP),
+		}
+		prettyPrint("This checks `extcodecopy( 0xff,0,0,0,0)` twice, (should be `2500` first time), "+
+			"and then does `extcodecopy( this,0,0,0,0)`.", code)
+	}
+
 }
