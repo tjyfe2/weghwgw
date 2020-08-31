@@ -25,6 +25,7 @@ import (
 )
 
 var activators = map[int]func(*JumpTable){
+	9999: enable9999,
 	2200: enable2200,
 	1884: enable1884,
 	1344: enable1344,
@@ -133,4 +134,36 @@ func enable2315(jt *JumpTable) {
 		maxStack:    maxStack(0, 0),
 		jumps:       true,
 	}
+}
+
+func enable9999(jt *JumpTable) {
+	// Gas repricings, EIP number TBD
+	jt[SSTORE].dynamicGas = gasSStoreEipXXX
+
+	jt[SLOAD].dynamicGas = gasSloadEipXXX
+	jt[SLOAD].constantGas = 100
+
+	jt[EXTCODECOPY].constantGas = 100
+	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIPXXX
+
+	jt[EXTCODESIZE].constantGas = 100
+	jt[EXTCODESIZE].dynamicGas = gasAccessListAccount
+
+	jt[EXTCODEHASH].constantGas = 100
+	jt[EXTCODEHASH].dynamicGas = gasAccessListAccount
+
+	jt[BALANCE].constantGas = 100
+	jt[BALANCE].dynamicGas = gasAccessListAccount
+
+	jt[CALL].constantGas = 100
+	jt[CALL].dynamicGas = gasCallEipXXX
+
+	jt[CALLCODE].constantGas = 100
+	jt[CALLCODE].dynamicGas = gasCallCodeEipXXX
+
+	jt[STATICCALL].constantGas = 100
+	jt[STATICCALL].dynamicGas = gasStaticCallEipXXX
+
+	jt[DELEGATECALL].constantGas = 100
+	jt[DELEGATECALL].dynamicGas = gasDelegateCallEipXXX
 }
