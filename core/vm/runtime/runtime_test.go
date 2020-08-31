@@ -794,4 +794,23 @@ func TestEip9999Cases(t *testing.T) {
 			"and then does `extcodecopy( this,0,0,0,0)`.", code)
 	}
 
+	{ // SLOAD + SSTORE
+		code := []byte{
+
+			// Add slot `0x1` to access list
+			byte(vm.PUSH1), 0x01, byte(vm.SLOAD), byte(vm.POP), // SLOAD( 0x1) (add to access list)
+			// Write to `0x1` which is already in access list
+			byte(vm.PUSH1), 0x11, byte(vm.PUSH1), 0x01, byte(vm.SSTORE), // SSTORE( loc: 0x01, val: 0x11)
+			// Write to `0x2` which is not in access list
+			byte(vm.PUSH1), 0x11, byte(vm.PUSH1), 0x02, byte(vm.SSTORE), // SSTORE( loc: 0x02, val: 0x11)
+			// Write again to `0x2`
+			byte(vm.PUSH1), 0x11, byte(vm.PUSH1), 0x02, byte(vm.SSTORE), // SSTORE( loc: 0x02, val: 0x11)
+			// Read slot in access list (0x2)
+			byte(vm.PUSH1), 0x02, byte(vm.SLOAD), // SLOAD( 0x2)
+			// Read slot in access list (0x1)
+			byte(vm.PUSH1), 0x01, byte(vm.SLOAD), // SLOAD( 0x1)
+		}
+		prettyPrint("This checks `sload( 0x1)` followed by `sstore(loc: 0x01, val:0x11)`, then 'naked' sstore:"+
+			"`sstore(loc: 0x02, val:0x11)` twice, and `sload(0x2)`, `sload(0x1)`. ", code)
+	}
 }
