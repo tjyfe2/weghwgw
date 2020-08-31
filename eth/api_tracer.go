@@ -561,9 +561,21 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 
 	// Execute transaction, either tracing all or just the requested one
 	var (
-		signer = types.MakeSigner(api.eth.blockchain.Config(), block.Number())
-		dumps  []string
+		signer      = types.MakeSigner(api.eth.blockchain.Config(), block.Number())
+		dumps       []string
+		chainConfig = api.eth.blockchain.Config()
 	)
+	// Check if there are any overrides: the caller may wish to enable a future
+	// fork when executing this block. Note, such overrides are only applicable to the
+	// actual specified block, not any preceding blocks that we have to go through
+	// in order to obtain the state.
+	// Therefore, it's perfectly valid to specify `"futureForkBlock": 0`, to enable `futureFork`
+	if config.Overrides != nil {
+		if yolov2 := config.Overrides.YoloV2Block; yolov2 != nil {
+			chainConfig.YoloV2Block = yolov2
+		}
+		// todo add more if we want them
+	}
 	for i, tx := range block.Transactions() {
 		// Prepare the trasaction for un-traced execution
 		var (
@@ -595,7 +607,7 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 			}
 		}
 		// Execute the transaction and flush any traces to disk
-		vmenv := vm.NewEVM(vmctx, statedb, api.eth.blockchain.Config(), vmConf)
+		vmenv := vm.NewEVM(vmctx, statedb, chainConfig, vmConf)
 		_, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
 		if writer != nil {
 			writer.Flush()
