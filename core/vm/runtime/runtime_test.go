@@ -722,3 +722,53 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	//benchmarkNonModifyingCode(10000000, staticCallIdentity, "staticcall-identity-10M", b)
 	//benchmarkNonModifyingCode(10000000, loopingCode, "loop-10M", b)
 }
+
+// TestEip9999Cases contains various testcases that are used for the (TODO @holiman)
+// EIP about gas repricings
+func TestEip9999Cases(t *testing.T) {
+	cfg := &Config{
+		EVMConfig: vm.Config{
+			Debug:     true,
+			Tracer:    vm.NewMarkdownLogger(nil, os.Stdout),
+			ExtraEips: []int{9999},
+		},
+	}
+	prettyPrint := func(comment string, code []byte) {
+		instrs := make([]string, 0)
+		it := asm.NewInstructionIterator(code)
+		for it.Next() {
+			if it.Arg() != nil && 0 < len(it.Arg()) {
+				instrs = append(instrs, fmt.Sprintf("%v 0x%x", it.Op(), it.Arg()))
+			} else {
+				instrs = append(instrs, fmt.Sprintf("%v", it.Op()))
+			}
+		}
+		ops := strings.Join(instrs, ", ")
+
+		fmt.Printf("%v\n\nBytecode: \n```\n0x%x\n```\nOperations: \n```\n%v\n```\n\n",
+			comment,
+			code, ops)
+		Execute(code, nil, cfg)
+	}
+
+	{ // First eip testcase
+		code := []byte{
+			byte(vm.PUSH1), 4,
+			byte(vm.EXTCODEHASH),byte(vm.POP),
+			byte(vm.PUSH1), 4,
+			byte(vm.EXTCODEHASH),byte(vm.POP),
+			byte(vm.PUSH1), 0xff,
+			byte(vm.EXTCODESIZE),byte(vm.POP),
+			byte(vm.PUSH1), 0xff,
+			byte(vm.EXTCODESIZE),byte(vm.POP),
+			byte(vm.PUSH1), 0xff,
+			byte(vm.BALANCE),byte(vm.POP),
+			byte(vm.PUSH1), 0xfe,
+			byte(vm.BALANCE),byte(vm.POP),
+			byte(vm.PUSH1), 0xfe,
+			byte(vm.BALANCE),byte(vm.POP),
+			byte(vm.STOP),
+		}
+		prettyPrint("This checks `EXTCODEHASH` of a precompile, which should be `100`, and later checks the `EXTCODSIZE`/`BALANCE` of some non-precompiles.", code)
+	}
+}
