@@ -56,11 +56,21 @@ var (
 	byzantiumInstructionSet        = newByzantiumInstructionSet()
 	constantinopleInstructionSet   = newConstantinopleInstructionSet()
 	istanbulInstructionSet         = newIstanbulInstructionSet()
-	yoloV1InstructionSet           = newYoloV1InstructionSet()
+	//yoloV1InstructionSet           = newYoloV1InstructionSet()
+	yoloV2InstructionSet = newYoloV2InstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
+
+// newYoloV2InstructionSet creates an instructionset containing the gas repricings
+// from an to-be-determined EIP number. TODO @holiman
+func newYoloV2InstructionSet() JumpTable {
+	// OBS: It is not based of YoloV1, but on Istanbul
+	instructionSet := newIstanbulInstructionSet()
+	enable9999(&instructionSet)
+	return instructionSet
+}
 
 func newYoloV1InstructionSet() JumpTable {
 	instructionSet := newIstanbulInstructionSet()

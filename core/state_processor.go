@@ -96,10 +96,10 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(context, statedb, config, cfg)
 
-	if config.IsEIPXXX(header.Number) {
+	if config.IsYoloV2(header.Number) {
 		statedb.AddAccessListAccount(msg.From())
 		if dst := msg.To(); dst != nil {
-			statedb.AddAccessListAccount(dst)
+			statedb.AddAccessListAccount(*dst)
 			// If it's a create-tx, the destination will be added inside evm.create
 		}
 		for _, addr := range vmenv.ActivePrecompiles() {
