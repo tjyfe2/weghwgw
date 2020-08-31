@@ -438,6 +438,11 @@ func (c *ChainConfig) IsEWASM(num *big.Int) bool {
 	return isForked(c.EWASMBlock, num)
 }
 
+// isEIPXXX returns whether num represents a block number after gas repricings @TODO
+func (c *ChainConfig) IsEIPXXX(num *big.Int) bool{
+	return true // TODO @holiman
+}
+
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *ConfigCompatError {
