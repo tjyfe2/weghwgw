@@ -726,14 +726,10 @@ func BenchmarkSimpleLoop(b *testing.B) {
 // TestEip9999Cases contains various testcases that are used for the (TODO @holiman)
 // EIP about gas repricings
 func TestEip9999Cases(t *testing.T) {
-	cfg := &Config{
-		EVMConfig: vm.Config{
-			Debug:     true,
-			Tracer:    vm.NewMarkdownLogger(nil, os.Stdout),
-			ExtraEips: []int{9999},
-		},
-	}
+
+	id := 1
 	prettyPrint := func(comment string, code []byte) {
+
 		instrs := make([]string, 0)
 		it := asm.NewInstructionIterator(code)
 		for it.Next() {
@@ -744,11 +740,18 @@ func TestEip9999Cases(t *testing.T) {
 			}
 		}
 		ops := strings.Join(instrs, ", ")
-
+		fmt.Printf("### Case %d\n\n", id)
+		id ++
 		fmt.Printf("%v\n\nBytecode: \n```\n0x%x\n```\nOperations: \n```\n%v\n```\n\n",
 			comment,
 			code, ops)
-		Execute(code, nil, cfg)
+		Execute(code, nil, &Config{
+			EVMConfig: vm.Config{
+				Debug:     true,
+				Tracer:    vm.NewMarkdownLogger(nil, os.Stdout),
+				ExtraEips: []int{9999},
+			},
+		})
 	}
 
 	{ // First eip testcase
@@ -790,7 +793,7 @@ func TestEip9999Cases(t *testing.T) {
 
 			byte(vm.STOP),
 		}
-		prettyPrint("This checks `extcodecopy( 0xff,0,0,0,0)` twice, (should be `2500` first time), "+
+		prettyPrint("This checks `extcodecopy( 0xff,0,0,0,0)` twice, (should be expensive first time), "+
 			"and then does `extcodecopy( this,0,0,0,0)`.", code)
 	}
 
@@ -812,5 +815,22 @@ func TestEip9999Cases(t *testing.T) {
 		}
 		prettyPrint("This checks `sload( 0x1)` followed by `sstore(loc: 0x01, val:0x11)`, then 'naked' sstore:"+
 			"`sstore(loc: 0x02, val:0x11)` twice, and `sload(0x2)`, `sload(0x1)`. ", code)
+	}
+	{// Call variants
+		code := []byte{
+			// identity precompile
+			byte(vm.PUSH1),0x0,byte(vm.DUP1),byte(vm.DUP1),byte(vm.DUP1),byte(vm.DUP1),
+			byte(vm.PUSH1),0x04,byte(vm.PUSH1),0x0,byte(vm.CALL), byte(vm.POP),
+
+			// random account - call 1
+			byte(vm.PUSH1),0x0,byte(vm.DUP1),byte(vm.DUP1),byte(vm.DUP1),byte(vm.DUP1),
+			byte(vm.PUSH1),0xff,byte(vm.PUSH1),0x0,byte(vm.CALL), byte(vm.POP),
+
+			// random account - call 2
+			byte(vm.PUSH1),0x0,byte(vm.DUP1),byte(vm.DUP1),byte(vm.DUP1),byte(vm.DUP1),
+			byte(vm.PUSH1),0xff,byte(vm.PUSH1),0x0,byte(vm.STATICCALL), byte(vm.POP),
+		}
+		prettyPrint("This calls the `identity`-precompile (cheap), then calls an account (expensive) and `staticcall`s the same" +
+			"account (cheap)", code)
 	}
 }
