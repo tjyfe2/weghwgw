@@ -25,7 +25,7 @@ import (
 )
 
 var activators = map[int]func(*JumpTable){
-	9999: enable9999,
+	2929: enable2929,
 	2200: enable2200,
 	1884: enable1884,
 	1344: enable1344,
@@ -136,37 +136,41 @@ func enable2315(jt *JumpTable) {
 	}
 }
 
-func enable9999(jt *JumpTable) {
-	// Gas repricings, EIP number TBD
-	jt[SSTORE].dynamicGas = gasSStoreEipXXX
+// enable2929 enables "EIP-2929: Gas cost increases for state access opcodes"
+// https://eips.ethereum.org/EIPS/eip-2929
+func enable2929(jt *JumpTable) {
 
-	jt[SLOAD].constantGas = EipXXXWarmStorageReadCost
-	jt[SLOAD].dynamicGas = gasSloadEipXXX
+	jt[SSTORE].dynamicGas = gasSStoreEIP2929
 
-	jt[EXTCODECOPY].constantGas = EipXXXWarmStorageReadCost
-	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIPXXX
+	jt[SLOAD].constantGas = WarmStorageReadCostEIP2929
+	jt[SLOAD].dynamicGas = gasSloadEIP2929
 
-	jt[EXTCODESIZE].constantGas = EipXXXWarmStorageReadCost
-	jt[EXTCODESIZE].dynamicGas = gasAccessListAccount
+	jt[EXTCODECOPY].constantGas = WarmStorageReadCostEIP2929
+	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIP2929
 
-	jt[EXTCODEHASH].constantGas = EipXXXWarmStorageReadCost
-	jt[EXTCODEHASH].dynamicGas = gasAccessListAccount
+	jt[EXTCODESIZE].constantGas = WarmStorageReadCostEIP2929
+	jt[EXTCODESIZE].dynamicGas = gasEip2929AccountCheck
 
-	jt[BALANCE].constantGas = EipXXXWarmStorageReadCost
-	jt[BALANCE].dynamicGas = gasAccessListAccount
+	jt[EXTCODEHASH].constantGas = WarmStorageReadCostEIP2929
+	jt[EXTCODEHASH].dynamicGas = gasEip2929AccountCheck
 
-	jt[CALL].constantGas = EipXXXWarmStorageReadCost
-	jt[CALL].dynamicGas = gasCallEipXXX
+	jt[BALANCE].constantGas = WarmStorageReadCostEIP2929
+	jt[BALANCE].dynamicGas = gasEip2929AccountCheck
 
-	jt[CALLCODE].constantGas = EipXXXWarmStorageReadCost
-	jt[CALLCODE].dynamicGas = gasCallCodeEipXXX
+	jt[CALL].constantGas = WarmStorageReadCostEIP2929
+	jt[CALL].dynamicGas = gasCallEIP2929
 
-	jt[STATICCALL].constantGas = EipXXXWarmStorageReadCost
-	jt[STATICCALL].dynamicGas = gasStaticCallEipXXX
+	jt[CALLCODE].constantGas = WarmStorageReadCostEIP2929
+	jt[CALLCODE].dynamicGas = gasCallCodeEIP2929
 
-	jt[DELEGATECALL].constantGas = EipXXXWarmStorageReadCost
-	jt[DELEGATECALL].dynamicGas = gasDelegateCallEipXXX
+	jt[STATICCALL].constantGas = WarmStorageReadCostEIP2929
+	jt[STATICCALL].dynamicGas = gasStaticCallEIP2929
 
+	jt[DELEGATECALL].constantGas = WarmStorageReadCostEIP2929
+	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP2929
+
+	// This was previously part of the dynamic cost, but we're using it as a constantGas
+	// factor here
 	jt[SELFDESTRUCT].constantGas = params.SelfdestructGasEIP150
-	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEipXXX
+	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
 }

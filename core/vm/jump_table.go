@@ -63,12 +63,12 @@ var (
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
 
-// newYoloV2InstructionSet creates an instructionset containing the gas repricings
-// from an to-be-determined EIP number. TODO @holiman
+// newYoloV2InstructionSet creates an instructionset containing
+// - "EIP-2929: Gas cost increases for state access opcodes"
 func newYoloV2InstructionSet() JumpTable {
 	// OBS: It is not based of YoloV1, but on Istanbul
 	instructionSet := newIstanbulInstructionSet()
-	enable9999(&instructionSet)
+	enable2929(&instructionSet)
 	return instructionSet
 }
 
