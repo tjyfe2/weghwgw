@@ -7,6 +7,12 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+const (
+	EipXXXColdAccountAccessCost = uint64(2600)
+	EipXXXColdSloadCost         = uint64(2100)
+	EipXXXWarmStorageReadCost   = uint64(100)
+)
+
 // gasStoreEipXXX implements gas cost for SSTORE according to EIP-TBD
 //
 // When calling SSTORE, check if the (address, storage_key) pair is in accessed_storage_keys.
@@ -45,7 +51,7 @@ func gasSStoreEipXXX(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	)
 	// Check slot presence in the access list
 	if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
-		cost = 2000
+		cost = EipXXXColdSloadCost
 		// If the caller cannot afford the cost, this change will be rolled back
 		// If he does afford it, we can skip checking the same thing later on, during execution
 		evm.StateDB.AddAccessListSlot(contract.Address(), slot)
@@ -54,7 +60,7 @@ func gasSStoreEipXXX(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 
 	if current == value { // noop (1)
 		//return cost + params.SstoreNoopGasEIP2200, nil
-		return cost + 100, nil // SLOAD_GAS
+		return cost + EipXXXWarmStorageReadCost, nil // SLOAD_GAS
 	}
 	original := evm.StateDB.GetCommittedState(contract.Address(), common.Hash(x.Bytes32()))
 	if original == current {
@@ -65,7 +71,7 @@ func gasSStoreEipXXX(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 			evm.StateDB.AddRefund(params.SstoreClearRefundEIP2200)
 		}
 		//return params.SstoreCleanGasEIP2200, nil
-		return cost + 3000, nil // write existing slot (2.1.2)
+		return cost + (5000 - EipXXXColdSloadCost), nil // write existing slot (2.1.2)
 	}
 	if original != (common.Hash{}) {
 		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
@@ -82,7 +88,7 @@ func gasSStoreEipXXX(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		}
 	}
 	//return cost + params.SstoreDirtyGasEIP2200, nil // dirty update (2.2)
-	return cost + 100, nil // dirty update (2.2)
+	return cost + EipXXXWarmStorageReadCost, nil // dirty update (2.2)
 }
 
 // gasSloadEipXXX calculates dynamic gas for SLOAD according to EIP-XXX
@@ -99,8 +105,8 @@ func gasSloadEipXXX(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 		// If he does afford it, we can skip checking the same thing later on, during execution
 		evm.StateDB.AddAccessListSlot(contract.Address(), slot)
 
-		// We return 1900 || 0, and have staticGas set to 100 => 2000 || 100
-		return 1900, nil
+		// We return cold-warm, since EipXXXWarmStorageReadCost is already charged as constantGas
+		return EipXXXColdSloadCost - EipXXXWarmStorageReadCost, nil
 	}
 	return 0, nil
 }
@@ -117,7 +123,7 @@ func gasExtCodeCopyEIPXXX(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 		// If the caller cannot afford the cost, this change will be rolled back
 		evm.StateDB.AddAccessListAccount(addr)
 		var overflow bool
-		if gas, overflow = math.SafeAdd(gas, 2400); overflow {
+		if gas, overflow = math.SafeAdd(gas, EipXXXColdAccountAccessCost-EipXXXWarmStorageReadCost); overflow {
 			return 0, ErrGasUintOverflow
 		}
 		return gas, nil
@@ -137,7 +143,8 @@ func gasAccessListAccount(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 	if !evm.StateDB.AddrInAccessList(addr) {
 		// If the caller cannot afford the cost, this change will be rolled back
 		evm.StateDB.AddAccessListAccount(addr)
-		return 2400, nil
+		// The warm storage read cost is already charged as constantGas
+		return EipXXXColdAccountAccessCost - EipXXXWarmStorageReadCost, nil
 	}
 	return 0, nil
 }
@@ -150,9 +157,14 @@ func makeCallVariantGasCalEipXXX(oldCalculator gasFunc) gasFunc {
 		if !evm.StateDB.AddrInAccessList(addr) {
 			// If the caller cannot afford the cost, this change will be rolled back
 			evm.StateDB.AddAccessListAccount(addr)
-			gas = 2500 - 700
+			// EipXXXWarmStorageReadCost (100) is already deducted in the form of a constant cost
+			gas = EipXXXColdAccountAccessCost - EipXXXWarmStorageReadCost
 		}
-		// Now call the old calculator
+		// Now call the old calculator, which takes into account
+		// - create new account
+		// - transfer value
+		// - memory expansion
+		// - 63/64ths rule
 		gasB, err := oldCalculator(evm, contract, stack, mem, memorySize)
 		if err != nil {
 			return 0, err
@@ -171,3 +183,24 @@ var (
 	gasStaticCallEipXXX   = makeCallVariantGasCalEipXXX(gasStaticCall)
 	gasCallCodeEipXXX     = makeCallVariantGasCalEipXXX(gasCallCode)
 )
+
+func gasSelfdestructEipXXX(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var (
+		gas     uint64
+		address = common.Address(stack.Back(0).Bytes20())
+	)
+	if !evm.StateDB.AddrInAccessList(address) {
+		// If the caller cannot afford the cost, this change will be rolled back
+		evm.StateDB.AddAccessListAccount(address)
+		gas = EipXXXColdAccountAccessCost
+	}
+	// if empty and transfers value
+	if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
+		gas += params.CreateBySelfdestructGas
+	}
+	if !evm.StateDB.HasSuicided(contract.Address()) {
+		evm.StateDB.AddRefund(params.SelfdestructRefundGas)
+	}
+	return gas, nil
+
+}

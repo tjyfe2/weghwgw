@@ -140,30 +140,33 @@ func enable9999(jt *JumpTable) {
 	// Gas repricings, EIP number TBD
 	jt[SSTORE].dynamicGas = gasSStoreEipXXX
 
+	jt[SLOAD].constantGas = EipXXXWarmStorageReadCost
 	jt[SLOAD].dynamicGas = gasSloadEipXXX
-	jt[SLOAD].constantGas = 100
 
-	jt[EXTCODECOPY].constantGas = 100
+	jt[EXTCODECOPY].constantGas = EipXXXWarmStorageReadCost
 	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIPXXX
 
-	jt[EXTCODESIZE].constantGas = 100
+	jt[EXTCODESIZE].constantGas = EipXXXWarmStorageReadCost
 	jt[EXTCODESIZE].dynamicGas = gasAccessListAccount
 
-	jt[EXTCODEHASH].constantGas = 100
+	jt[EXTCODEHASH].constantGas = EipXXXWarmStorageReadCost
 	jt[EXTCODEHASH].dynamicGas = gasAccessListAccount
 
-	jt[BALANCE].constantGas = 100
+	jt[BALANCE].constantGas = EipXXXWarmStorageReadCost
 	jt[BALANCE].dynamicGas = gasAccessListAccount
 
-	jt[CALL].constantGas = 100
+	jt[CALL].constantGas = EipXXXWarmStorageReadCost
 	jt[CALL].dynamicGas = gasCallEipXXX
 
-	jt[CALLCODE].constantGas = 100
+	jt[CALLCODE].constantGas = EipXXXWarmStorageReadCost
 	jt[CALLCODE].dynamicGas = gasCallCodeEipXXX
 
-	jt[STATICCALL].constantGas = 100
+	jt[STATICCALL].constantGas = EipXXXWarmStorageReadCost
 	jt[STATICCALL].dynamicGas = gasStaticCallEipXXX
 
-	jt[DELEGATECALL].constantGas = 100
+	jt[DELEGATECALL].constantGas = EipXXXWarmStorageReadCost
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEipXXX
+
+	jt[SELFDESTRUCT].constantGas = params.SelfdestructGasEIP150
+	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEipXXX
 }
