@@ -14,7 +14,7 @@ import (
 var _ = (*txdataMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
-func (t txdata) MarshalJSON() ([]byte, error) {
+func (t *LegacyTransaction) MarshalJSON() ([]byte, error) {
 	type txdata struct {
 		AccountNonce hexutil.Uint64  `json:"nonce"    gencodec:"required"`
 		Price        *hexutil.Big    `json:"gasPrice" gencodec:"required"`
@@ -37,12 +37,14 @@ func (t txdata) MarshalJSON() ([]byte, error) {
 	enc.V = (*hexutil.Big)(t.V)
 	enc.R = (*hexutil.Big)(t.R)
 	enc.S = (*hexutil.Big)(t.S)
-	enc.Hash = t.Hash
+
+	// enc.Hash = &h
+
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (t *txdata) UnmarshalJSON(input []byte) error {
+func (t *LegacyTransaction) UnmarshalJSON(input []byte) error {
 	type txdata struct {
 		AccountNonce *hexutil.Uint64 `json:"nonce"    gencodec:"required"`
 		Price        *hexutil.Big    `json:"gasPrice" gencodec:"required"`
@@ -94,8 +96,6 @@ func (t *txdata) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 's' for txdata")
 	}
 	t.S = (*big.Int)(dec.S)
-	if dec.Hash != nil {
-		t.Hash = dec.Hash
-	}
+
 	return nil
 }
