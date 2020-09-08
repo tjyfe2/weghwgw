@@ -53,12 +53,6 @@ type inner interface {
 	// Protected returns whether the transaction is protected from replay protection.
 	Protected() bool
 
-	// MarshalJSON encodes the web3 RPC transaction format.
-	MarshalJSON() ([]byte, error)
-
-	// UnmarshalJSON decodes the web3 RPC transaction format.
-	UnmarshalJSON(input []byte) error
-
 	Data() []byte
 	Gas() uint64
 	GasPrice() *big.Int
@@ -108,9 +102,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 
 // MarshalJSON encodes the web3 RPC transaction format.
 func (tx *Transaction) MarshalJSON() ([]byte, error) {
-	// hash := tx.Hash()
-	data := tx.inner
-	return data.(*LegacyTransaction).MarshalJSON()
+	return tx.ToJSON()
 }
 
 // UnmarshalJSON decodes the web3 RPC transaction format.
