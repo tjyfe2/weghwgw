@@ -29,8 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-//go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
-
 var (
 	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
 )
@@ -70,6 +68,7 @@ type inner interface {
 	RawSignatureValues() (v, r, s *big.Int)
 }
 
+func (tx *Transaction) Type() int         { return tx.typ }
 func (tx *Transaction) ChainId() *big.Int { return tx.inner.ChainId() }
 func (tx *Transaction) Protected() bool   { return tx.inner.Protected() }
 
@@ -98,11 +97,6 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	}
 	tx.inner = l
 	return err
-}
-
-// MarshalJSON encodes the web3 RPC transaction format.
-func (tx *Transaction) MarshalJSON() ([]byte, error) {
-	return tx.ToJSON()
 }
 
 // UnmarshalJSON decodes the web3 RPC transaction format.

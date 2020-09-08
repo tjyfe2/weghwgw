@@ -11,10 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-var _ = (*txdataMarshaling)(nil)
-
 // MarshalJSON marshals as JSON.
-func (t *Transaction) ToJSON() ([]byte, error) {
+func (t *Transaction) MarshalJSON() ([]byte, error) {
 	type txdata struct {
 		AccountNonce hexutil.Uint64  `json:"nonce"    gencodec:"required"`
 		Price        *hexutil.Big    `json:"gasPrice" gencodec:"required"`
