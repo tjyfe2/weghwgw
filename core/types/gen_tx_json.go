@@ -11,8 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-// MarshalJSON marshals as JSON.
-func (t *Transaction) MarshalJSON() ([]byte, error) {
+// MarshalJSONWithHash marshals as JSON with a hash.
+func (t *LegacyTransaction) MarshalJSONWithHash(hash *common.Hash) ([]byte, error) {
 	type txdata struct {
 		AccountNonce hexutil.Uint64  `json:"nonce"    gencodec:"required"`
 		Price        *hexutil.Big    `json:"gasPrice" gencodec:"required"`
@@ -28,20 +28,16 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 
 	var enc txdata
 
-	ltx := t.inner.(*LegacyTransaction)
-
-	enc.AccountNonce = hexutil.Uint64(ltx.AccountNonce)
-	enc.Price = (*hexutil.Big)(ltx.Price)
-	enc.GasLimit = hexutil.Uint64(ltx.GasLimit)
-	enc.Recipient = ltx.Recipient
-	enc.Amount = (*hexutil.Big)(ltx.Amount)
-	enc.Payload = ltx.Payload
-	enc.V = (*hexutil.Big)(ltx.V)
-	enc.R = (*hexutil.Big)(ltx.R)
-	enc.S = (*hexutil.Big)(ltx.S)
-
-	h := t.Hash()
-	enc.Hash = &h
+	enc.AccountNonce = hexutil.Uint64(t.AccountNonce)
+	enc.Price = (*hexutil.Big)(t.Price)
+	enc.GasLimit = hexutil.Uint64(t.GasLimit)
+	enc.Recipient = t.Recipient
+	enc.Amount = (*hexutil.Big)(t.Amount)
+	enc.Payload = t.Payload
+	enc.V = (*hexutil.Big)(t.V)
+	enc.R = (*hexutil.Big)(t.R)
+	enc.S = (*hexutil.Big)(t.S)
+	enc.Hash = hash
 
 	return json.Marshal(&enc)
 }
@@ -58,7 +54,6 @@ func (t *LegacyTransaction) UnmarshalJSON(input []byte) error {
 		V            *hexutil.Big    `json:"v" gencodec:"required"`
 		R            *hexutil.Big    `json:"r" gencodec:"required"`
 		S            *hexutil.Big    `json:"s" gencodec:"required"`
-		Hash         *common.Hash    `json:"hash" rlp:"-"`
 	}
 	var dec txdata
 	if err := json.Unmarshal(input, &dec); err != nil {

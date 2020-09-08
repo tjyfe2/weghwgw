@@ -51,6 +51,7 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 		i.Price.Set(gasPrice)
 	}
 	return &Transaction{
+		typ:   0,
 		inner: &i,
 		time:  time.Now(),
 	}

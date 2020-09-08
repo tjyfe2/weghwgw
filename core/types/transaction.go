@@ -18,6 +18,7 @@ package types
 
 import (
 	"container/heap"
+	"encoding/json"
 	"errors"
 	"io"
 	"math/big"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -50,6 +52,12 @@ type inner interface {
 
 	// Protected returns whether the transaction is protected from replay protection.
 	Protected() bool
+
+	// MarshalJSONWithHash marshals as JSON with a hash.
+	MarshalJSONWithHash(hash *common.Hash) ([]byte, error)
+
+	// UnmarshalJSON unmarshals from JSON.
+	UnmarshalJSON(input []byte) error
 
 	Data() []byte
 	Gas() uint64
@@ -99,28 +107,55 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	return err
 }
 
+// MarshalJSON encodes the web3 RPC transaction format.
+func (tx *Transaction) MarshalJSON() ([]byte, error) {
+	hash := tx.Hash()
+	return tx.inner.MarshalJSONWithHash(&hash)
+}
+
 // UnmarshalJSON decodes the web3 RPC transaction format.
 func (tx *Transaction) UnmarshalJSON(input []byte) error {
-	var dec LegacyTransaction
-	if err := dec.UnmarshalJSON(input); err != nil {
+	type id struct {
+		Type *hexutil.Uint64 `json:"type" rlp:"-"`
+		Hash *common.Hash    `json:"hash" rlp:"-"`
+	}
+
+	var dec id
+	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
+	tx.hash.Store(*dec.Hash)
 
-	withSignature := dec.V.Sign() != 0 || dec.R.Sign() != 0 || dec.S.Sign() != 0
-	if withSignature {
-		var V byte
-		if isProtectedV(dec.V) {
-			chainID := deriveChainId(dec.V).Uint64()
-			V = byte(dec.V.Uint64() - 35 - 2*chainID)
-		} else {
-			V = byte(dec.V.Uint64() - 27)
+	if dec.Type == nil || *dec.Type == hexutil.Uint64(0) {
+		var dec LegacyTransaction
+		if err := dec.UnmarshalJSON(input); err != nil {
+			return err
 		}
-		if !crypto.ValidateSignatureValues(V, dec.R, dec.S, false) {
-			return ErrInvalidSig
+
+		withSignature := dec.V.Sign() != 0 || dec.R.Sign() != 0 || dec.S.Sign() != 0
+		if withSignature {
+			if err := sanityCheckSignature(dec.V, dec.R, dec.S); err != nil {
+				return err
+			}
 		}
+
+		tx.inner = &dec
 	}
 
-	tx.inner = &dec
+	return nil
+}
+
+func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int) error {
+	var plainV byte
+	if isProtectedV(v) {
+		chainID := deriveChainId(v).Uint64()
+		plainV = byte(v.Uint64() - 35 - 2*chainID)
+	} else {
+		plainV = byte(v.Uint64() - 27)
+	}
+	if !crypto.ValidateSignatureValues(plainV, r, s, false) {
+		return ErrInvalidSig
+	}
 
 	return nil
 }
