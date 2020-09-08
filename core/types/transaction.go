@@ -35,8 +35,13 @@ var (
 	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
 )
 
+const (
+	LegacyTxId = iota
+	StandardTxId
+)
+
 type Transaction struct {
-	typ   int       // EIP-2718 transaction type identifier
+	typ   uint8     // EIP-2718 transaction type identifier
 	inner inner     // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
 
@@ -76,7 +81,7 @@ type inner interface {
 	RawSignatureValues() (v, r, s *big.Int)
 }
 
-func (tx *Transaction) Type() int         { return tx.typ }
+func (tx *Transaction) Type() uint8       { return tx.typ }
 func (tx *Transaction) ChainId() *big.Int { return tx.inner.ChainId() }
 func (tx *Transaction) Protected() bool   { return tx.inner.Protected() }
 
@@ -90,8 +95,13 @@ func isProtectedV(V *big.Int) bool {
 }
 
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
-	l := tx.inner.(*LegacyTransaction)
-	return rlp.Encode(w, l)
+	if tx.typ != LegacyTxId {
+		if _, err := w.Write([]byte{tx.typ}); err != nil {
+			return err
+		}
+	}
+
+	return rlp.Encode(w, tx.inner)
 }
 
 func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
@@ -176,8 +186,17 @@ func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
 		return hash.(common.Hash)
 	}
-	v := tx.inner.Hash()
+
+	var v common.Hash
+
+	if tx.typ == LegacyTxId {
+		v = rlpHash(tx.inner)
+	} else {
+		v = rlpHash([]interface{}{tx.typ, tx.inner})
+	}
+
 	tx.hash.Store(v)
+
 	return v
 }
 func (tx *Transaction) Size() common.StorageSize {

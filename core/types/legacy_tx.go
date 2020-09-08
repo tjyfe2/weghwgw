@@ -29,7 +29,7 @@ func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPric
 	return newTransaction(nonce, nil, amount, gasLimit, gasPrice, data)
 }
 
-func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
+func newLegacyTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
 	if len(data) > 0 {
 		data = common.CopyBytes(data)
 	}
@@ -51,7 +51,7 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 		i.Price.Set(gasPrice)
 	}
 	return &Transaction{
-		typ:   0,
+		typ:   LegacyTxId,
 		inner: &i,
 		time:  time.Now(),
 	}
