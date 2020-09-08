@@ -90,8 +90,7 @@ func isProtectedV(V *big.Int) bool {
 }
 
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
-	var l *LegacyTransaction
-	l = tx.inner.(*LegacyTransaction)
+	l := tx.inner.(*LegacyTransaction)
 	return rlp.Encode(w, l)
 }
 
