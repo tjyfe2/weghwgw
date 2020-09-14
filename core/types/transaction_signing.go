@@ -131,23 +131,13 @@ func (s YoloSigner) Sender(tx *Transaction) (common.Address, error) {
 		return common.Address{}, ErrInvalidChainId
 	}
 	V, R, S := tx.RawSignatureValues()
-	V = new(big.Int).Sub(V, s.chainIdMul)
-	V.Sub(V, big8)
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
 // SignatureValues returns signature values. This signature
 // needs to be in the [R || S || V] format where V is 0 or 1.
 func (s YoloSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
-	R, S, V, err = HomesteadSigner{}.SignatureValues(tx, sig)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if s.chainId.Sign() != 0 {
-		V = big.NewInt(int64(sig[64] + 35))
-		V.Add(V, s.chainIdMul)
-	}
-	return R, S, V, nil
+	return HomesteadSigner{}.SignatureValues(tx, sig)
 }
 
 // Hash returns the hash to be signed by the sender.
@@ -166,13 +156,14 @@ func (s YoloSigner) Hash(tx *Transaction) common.Hash {
 		})
 	} else {
 		h = rlpHash([]interface{}{
+			tx.typ,
+			tx.ChainId(),
 			tx.Nonce(),
 			tx.GasPrice(),
 			tx.Gas(),
 			tx.To(),
 			tx.Value(),
 			tx.Data(),
-			s.chainId, uint(0), uint(0),
 		})
 	}
 
