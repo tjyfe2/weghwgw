@@ -33,11 +33,12 @@ import (
 
 var (
 	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
+	ErrBadTxType  = errors.New("transaction type not valid in this context")
 )
 
 const (
 	LegacyTxId = iota
-	StandardTxId
+	BaseTxId
 )
 
 type Transaction struct {
@@ -213,24 +214,54 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	if err != nil {
 		return nil, err
 	}
-	inner := tx.inner.(*LegacyTransaction)
-	cpy := &LegacyTransaction{
-		AccountNonce: inner.AccountNonce,
-		Price:        inner.Price,
-		GasLimit:     inner.GasLimit,
-		Recipient:    inner.Recipient,
-		Amount:       inner.Amount,
-		Payload:      inner.Payload,
 
-		V: inner.V,
-		R: inner.R,
-		S: inner.S,
-	}
-	cpy.R, cpy.S, cpy.V = r, s, v
+	var ret *Transaction
+	if tx.typ == LegacyTxId {
+		inner := tx.inner.(*LegacyTransaction)
+		cpy := &LegacyTransaction{
+			AccountNonce: inner.AccountNonce,
+			Price:        inner.Price,
+			GasLimit:     inner.GasLimit,
+			Recipient:    inner.Recipient,
+			Amount:       inner.Amount,
+			Payload:      inner.Payload,
 
-	ret := &Transaction{
-		inner: cpy,
-		time:  tx.time,
+			V: inner.V,
+			R: inner.R,
+			S: inner.S,
+		}
+		cpy.R, cpy.S, cpy.V = r, s, v
+
+		ret = &Transaction{
+			typ:   LegacyTxId,
+			inner: cpy,
+			time:  tx.time,
+		}
+	} else if tx.typ == BaseTxId {
+		inner := tx.inner.(*BaseTransaction)
+		cpy := &BaseTransaction{
+			Chain:        inner.Chain,
+			AccountNonce: inner.AccountNonce,
+			Price:        inner.Price,
+			GasLimit:     inner.GasLimit,
+			Recipient:    inner.Recipient,
+			Amount:       inner.Amount,
+			Payload:      inner.Payload,
+
+			V: inner.V,
+			R: inner.R,
+			S: inner.S,
+		}
+		cpy.R, cpy.S, cpy.V = r, s, v
+
+		ret = &Transaction{
+			typ:   BaseTxId,
+			inner: cpy,
+			time:  tx.time,
+		}
+
+	} else {
+		return nil, ErrBadTxType
 	}
 
 	return ret, nil
