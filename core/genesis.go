@@ -244,7 +244,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	case ghash == params.GoerliGenesisHash:
 		return params.GoerliChainConfig
 	case ghash == params.YoloV1GenesisHash:
-		return params.YoloV1ChainConfig
+		return params.YoloV2ChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -382,7 +382,7 @@ func DefaultGoerliGenesisBlock() *Genesis {
 
 func DefaultYoloV1GenesisBlock() *Genesis {
 	return &Genesis{
-		Config:     params.YoloV1ChainConfig,
+		Config:     params.YoloV2ChainConfig,
 		Timestamp:  0x5ed754f1,
 		ExtraData:  hexutil.MustDecode("0x00000000000000000000000000000000000000000000000000000000000000008a37866fd3627c9205a37c8685666f32ec07bb1b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
 		GasLimit:   0x47b760,

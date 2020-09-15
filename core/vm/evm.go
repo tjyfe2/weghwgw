@@ -66,8 +66,8 @@ func (evm *EVM) ActivePrecompiles() []common.Address {
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
-	//case evm.chainRules.IsYoloV2:
-	//	precompiles = PrecompiledContractsYoloV1
+	case evm.chainRules.IsYoloV2:
+		precompiles = PrecompiledContractsYoloV2
 	case evm.chainRules.IsIstanbul:
 		precompiles = PrecompiledContractsIstanbul
 	case evm.chainRules.IsByzantium:

@@ -213,8 +213,8 @@ var (
 		Threshold: 2,
 	}
 
-	// YoloV1ChainConfig contains the chain parameters to run a node on the YOLOv1 test network.
-	YoloV1ChainConfig = &ChainConfig{
+	// YoloV2ChainConfig contains the chain parameters to run a node on the YOLOv2 test network.
+	YoloV2ChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(133519467574833),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
@@ -476,7 +476,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "petersburgBlock", block: c.PetersburgBlock},
 		{name: "istanbulBlock", block: c.IstanbulBlock},
 		{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
-		{name: "yoloV1Block", block: c.YoloV2Block},
+		{name: "yoloV2Block", block: c.YoloV2Block},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number

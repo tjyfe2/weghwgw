@@ -68,15 +68,8 @@ type JumpTable [256]*operation
 func newYoloV2InstructionSet() JumpTable {
 	// OBS: It is not based of YoloV1, but on Istanbul
 	instructionSet := newIstanbulInstructionSet()
-	enable2929(&instructionSet)
-	return instructionSet
-}
-
-func newYoloV1InstructionSet() JumpTable {
-	instructionSet := newIstanbulInstructionSet()
-
 	enable2315(&instructionSet) // Subroutines - https://eips.ethereum.org/EIPS/eip-2315
-
+	enable2929(&instructionSet) // Access lists for trie accesses https://eips.ethereum.org/EIPS/eip-2929
 	return instructionSet
 }
 
