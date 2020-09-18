@@ -45,22 +45,15 @@ type (
 // ActivePrecompiles returns the addresses of the precompiles enabled with the current
 // configuration
 func (evm *EVM) ActivePrecompiles() []common.Address {
-	var precompiles map[common.Address]PrecompiledContract
 	switch {
-	//case evm.chainRules.IsYoloV2:
-	//	precompiles = PrecompiledContractsYoloV1
+	case evm.chainRules.IsYoloV2:
+		return PrecompiledAddressesYoloV2
 	case evm.chainRules.IsIstanbul:
-		precompiles = PrecompiledContractsIstanbul
+		return PrecompiledAddressesIstanbul
 	case evm.chainRules.IsByzantium:
-		precompiles = PrecompiledContractsByzantium
-	default:
-		precompiles = PrecompiledContractsHomestead
+		return PrecompiledAddressesByzantium
 	}
-	var addresses []common.Address
-	for k, _ := range precompiles {
-		addresses = append(addresses, k)
-	}
-	return addresses
+	return PrecompiledAddressesHomestead
 }
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
@@ -439,8 +432,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
 	// the access-list change should not be rolled back
-	evm.StateDB.AddAccessListAccount(address)
-
+	if evm.chainRules.IsYoloV2{
+		evm.StateDB.AddAddrToAccessList(address)
+	}
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {

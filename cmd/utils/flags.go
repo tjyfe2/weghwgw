@@ -745,7 +745,7 @@ func MakeDataDir(ctx *cli.Context) string {
 			return filepath.Join(path, "goerli")
 		}
 		if ctx.GlobalBool(YoloV2Flag.Name) {
-			return filepath.Join(path, "yolo-v1")
+			return filepath.Join(path, "yolo-v2")
 		}
 		return path
 	}
@@ -1270,7 +1270,7 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 	case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
 	case ctx.GlobalBool(YoloV2Flag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "yolo-v1")
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "yolo-v2")
 	}
 }
 
@@ -1605,9 +1605,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		setDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
 	case ctx.GlobalBool(YoloV2Flag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 133519467574833 // "yolov1"
+			cfg.NetworkId = 133519467574833 // yolo-v2 TODO: new network id
 		}
-		cfg.Genesis = core.DefaultYoloV1GenesisBlock()
+		cfg.Genesis = core.DefaultYoloV2GenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1792,7 +1792,7 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	case ctx.GlobalBool(GoerliFlag.Name):
 		genesis = core.DefaultGoerliGenesisBlock()
 	case ctx.GlobalBool(YoloV2Flag.Name):
-		genesis = core.DefaultYoloV1GenesisBlock()
+		genesis = core.DefaultYoloV2GenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}

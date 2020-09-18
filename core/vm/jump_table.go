@@ -56,17 +56,16 @@ var (
 	byzantiumInstructionSet        = newByzantiumInstructionSet()
 	constantinopleInstructionSet   = newConstantinopleInstructionSet()
 	istanbulInstructionSet         = newIstanbulInstructionSet()
-	//yoloV1InstructionSet           = newYoloV1InstructionSet()
-	yoloV2InstructionSet = newYoloV2InstructionSet()
+	yoloV2InstructionSet           = newYoloV2InstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
 
 // newYoloV2InstructionSet creates an instructionset containing
+// - "EIP-2315: Simple Subroutines"
 // - "EIP-2929: Gas cost increases for state access opcodes"
 func newYoloV2InstructionSet() JumpTable {
-	// OBS: It is not based of YoloV1, but on Istanbul
 	instructionSet := newIstanbulInstructionSet()
 	enable2315(&instructionSet) // Subroutines - https://eips.ethereum.org/EIPS/eip-2315
 	enable2929(&instructionSet) // Access lists for trie accesses https://eips.ethereum.org/EIPS/eip-2929

@@ -890,15 +890,19 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	return root, err
 }
 
-func (s *StateDB) AddAccessListAccount(addr common.Address) {
+func (s *StateDB) AddAddrToAccessList(addr common.Address) {
 	if s.accessList.AddAddr(addr) {
 		s.journal.append(accessListAddAccountChange{&addr})
 	}
 }
 
-func (s *StateDB) AddAccessListSlot(addr common.Address, slot common.Hash) {
+func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
 	addrCh, slotCh := s.accessList.AddSlot(addr, slot)
 	if addrCh {
+		// In practice, this should not happen, since there is no way to enter the
+		// scope of 'address' without having the 'address' become already added
+		// to the access list (via call-variant, create, etc).
+		// Better safe than sorry, though
 		s.journal.append(accessListAddAccountChange{&addr})
 	}
 	if slotCh {
@@ -914,5 +918,5 @@ func (s *StateDB) AddrInAccessList(addr common.Address) bool {
 }
 
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool)  {
-	return s.accessList.ContainsSlot(addr, slot)
+	return s.accessList.Contains(addr, slot)
 }

@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/params"
 	"io/ioutil"
 	"os"
 	"runtime"
@@ -39,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -575,31 +575,14 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 
 	if config != nil && config.Overrides != nil {
 		// Copy the config, to not screw up the main config
-		chainConfigCopy := &params.ChainConfig{
-			ChainID:             chainConfig.ChainID,
-			HomesteadBlock:      chainConfig.HomesteadBlock,
-			DAOForkBlock:        chainConfig.DAOForkBlock,
-			DAOForkSupport:      chainConfig.DAOForkSupport,
-			EIP150Block:         chainConfig.EIP150Block,
-			EIP150Hash:          chainConfig.EIP150Hash,
-			EIP155Block:         chainConfig.EIP150Block,
-			EIP158Block:         chainConfig.EIP158Block,
-			ByzantiumBlock:      chainConfig.ByzantiumBlock,
-			ConstantinopleBlock: chainConfig.ConstantinopleBlock,
-			PetersburgBlock:     chainConfig.PetersburgBlock,
-			IstanbulBlock:       chainConfig.IstanbulBlock,
-			MuirGlacierBlock:    chainConfig.MuirGlacierBlock,
-			YoloV2Block:         chainConfig.YoloV2Block,
-			EWASMBlock:          chainConfig.EWASMBlock,
-			Ethash:              chainConfig.Ethash,
-			Clique:              chainConfig.Clique,
-		}
+		// Note: the Clique-part is _not_ deep copied
+		chainConfigCopy := new(params.ChainConfig)
+		*chainConfigCopy = *chainConfig
 		chainConfig = chainConfigCopy
 		if yolov2 := config.Overrides.YoloV2Block; yolov2 != nil {
 			chainConfig.YoloV2Block = yolov2
 			canon = false
 		}
-		// todo add more if we want them
 	}
 	for i, tx := range block.Transactions() {
 		// Prepare the trasaction for un-traced execution

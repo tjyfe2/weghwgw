@@ -243,7 +243,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.RinkebyChainConfig
 	case ghash == params.GoerliGenesisHash:
 		return params.GoerliChainConfig
-	case ghash == params.YoloV1GenesisHash:
+	case ghash == params.YoloV2GenesisHash:
 		return params.YoloV2ChainConfig
 	default:
 		return params.AllEthashProtocolChanges
@@ -380,7 +380,8 @@ func DefaultGoerliGenesisBlock() *Genesis {
 	}
 }
 
-func DefaultYoloV1GenesisBlock() *Genesis {
+func DefaultYoloV2GenesisBlock() *Genesis {
+	// TODO: Update with yolov2 values + regenerate alloc data
 	return &Genesis{
 		Config:     params.YoloV2ChainConfig,
 		Timestamp:  0x5ed754f1,

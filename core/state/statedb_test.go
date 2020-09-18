@@ -329,15 +329,15 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			args: make([]int64, 1),
 		},
 		{
-			name: "AddAccessListAddress",
+			name: "AddAddrToAccessList",
 			fn: func(a testAction, s *StateDB) {
-				s.AddAccessListAccount(addr)
+				s.AddAddrToAccessList(addr)
 			},
 		},
 		{
-			name: "AddAccessListSlot",
+			name: "AddSlotToAccessList",
 			fn: func(a testAction, s *StateDB) {
-				s.AddAccessListSlot(addr,
+				s.AddSlotToAccessList(addr,
 					common.Hash{byte(a.args[0])})
 			},
 			args: make([]int64, 1),
@@ -742,14 +742,15 @@ func TestMissingTrieNodes(t *testing.T) {
 	}
 }
 
-func addr(a string) common.Address {
-	return common.HexToAddress(a)
-}
-func slot(a string) common.Hash {
-	return common.HexToHash(a)
-}
-
 func TestStateDBAccessList(t *testing.T) {
+	// Some helpers
+	addr := func(a string) common.Address {
+		return common.HexToAddress(a)
+	}
+	slot := func(a string) common.Hash {
+		return common.HexToHash(a)
+	}
+
 	memDb := rawdb.NewMemoryDatabase()
 	db := NewDatabase(memDb)
 	state, _ := New(common.Hash{}, db, nil)
@@ -774,9 +775,9 @@ func TestStateDBAccessList(t *testing.T) {
 		}
 	}
 
-	state.AddAccessListAccount(addr("aa"))          // 1
-	state.AddAccessListSlot(addr("bb"), slot("01")) // 2,3
-	state.AddAccessListSlot(addr("bb"), slot("02")) // 4
+	state.AddAddrToAccessList(addr("aa"))             // 1
+	state.AddSlotToAccessList(addr("bb"), slot("01")) // 2,3
+	state.AddSlotToAccessList(addr("bb"), slot("02")) // 4
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02")
 
@@ -787,17 +788,17 @@ func TestStateDBAccessList(t *testing.T) {
 	}
 
 	// same again, should cause no journal entries
-	state.AddAccessListSlot(addr("bb"), slot("01"))
-	state.AddAccessListSlot(addr("bb"), slot("02"))
-	state.AddAccessListAccount(addr("aa"))
+	state.AddSlotToAccessList(addr("bb"), slot("01"))
+	state.AddSlotToAccessList(addr("bb"), slot("02"))
+	state.AddAddrToAccessList(addr("aa"))
 	if exp, got := 4, state.journal.length(); exp != got {
 		t.Fatalf("journal length wrong, expected %d got %d", exp, got)
 	}
 	// some new ones
-	state.AddAccessListSlot(addr("bb"), slot("03")) // 5
-	state.AddAccessListSlot(addr("aa"), slot("01")) // 6
-	state.AddAccessListSlot(addr("cc"), slot("01")) // 7,8
-	state.AddAccessListAccount(addr("cc"))
+	state.AddSlotToAccessList(addr("bb"), slot("03")) // 5
+	state.AddSlotToAccessList(addr("aa"), slot("01")) // 6
+	state.AddSlotToAccessList(addr("cc"), slot("01")) // 7,8
+	state.AddAddrToAccessList(addr("cc"))
 	if exp, got := 8, state.journal.length(); exp != got {
 		t.Fatalf("journal length wrong, expected %d got %d", exp, got)
 	}
@@ -878,5 +879,4 @@ func TestStateDBAccessList(t *testing.T) {
 	if got, exp := len(state.accessList.slots), 1; got != exp {
 		t.Fatalf("expected empty, got %d", got)
 	}
-
 }

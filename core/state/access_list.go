@@ -22,17 +22,17 @@ import (
 
 type accessList struct {
 	addresses map[common.Address]int
-	slots     []map[common.Hash]bool
+	slots     []map[common.Hash]struct{}
 }
 
-// ContainsSlot returns true if the address is in the access list
+// Contains returns true if the address is in the access list
 func (al *accessList) ContainsAddr(address common.Address) bool {
 	_, ok := al.addresses[address]
 	return ok
 }
 
-// ContainsSlot returns whether the (addres, slot) is present.
-func (al *accessList) ContainsSlot(address common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
+// Contains returns whether the (address, slot) is present.
+func (al *accessList) Contains(address common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	idx, ok := al.addresses[address]
 	if !ok {
 		// no such address (and hence zero slots)
@@ -68,9 +68,9 @@ func (a *accessList) Copy() *accessList {
 		cp.addresses[k] = v
 	}
 	for _, slotMap := range a.slots {
-		newSlotmap := make(map[common.Hash]bool)
-		for k, v := range slotMap {
-			newSlotmap[k] = v
+		newSlotmap := make(map[common.Hash]struct{})
+		for k, _ := range slotMap {
+			newSlotmap[k] = struct{}{}
 		}
 		cp.slots = append(cp.slots, newSlotmap)
 	}
@@ -96,8 +96,8 @@ func (al *accessList) AddSlot(address common.Address, slot common.Hash) (addrCha
 	idx, addrOk := al.addresses[address]
 	if !addrOk || idx == -1 {
 		// Address not present, or addr present but no slots there
-		slotmap := make(map[common.Hash]bool)
-		slotmap[slot] = true
+		slotmap := make(map[common.Hash]struct{})
+		slotmap[slot] = struct{}{}
 		idx = len(al.slots)
 		al.addresses[address] = idx
 		al.slots = append(al.slots, slotmap)
@@ -110,8 +110,8 @@ func (al *accessList) AddSlot(address common.Address, slot common.Hash) (addrCha
 	}
 	// There is already an (address,slot) mapping
 	slotmap := al.slots[idx]
-	if !slotmap[slot] {
-		slotmap[slot] = true
+	if _, ok := slotmap[slot]; !ok {
+		slotmap[slot] = struct{}{}
 		// Journal add slot change
 		return false, true
 	}

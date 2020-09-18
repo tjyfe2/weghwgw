@@ -59,12 +59,12 @@ type StateDB interface {
 
 	AddrInAccessList(addr common.Address) bool
 	SlotInAccessList(addr common.Address, slot common.Hash) (addressOk bool, slotOk bool)
-	// AddAccessListAccount adds the given address to the access list. This operation is safe to perform
+	// AddAddrToAccessList adds the given address to the access list. This operation is safe to perform
 	// even if the feature/fork is not active yet
-	AddAccessListAccount(addr common.Address)
-	// AddAccessListSlot adds the given (address,slot) to the access list. This operation is safe to perform
+	AddAddrToAccessList(addr common.Address)
+	// AddSlotToAccessList adds the given (address,slot) to the access list. This operation is safe to perform
 	// even if the feature/fork is not active yet
-	AddAccessListSlot(addr common.Address, slot common.Hash)
+	AddSlotToAccessList(addr common.Address, slot common.Hash)
 
 	RevertToSnapshot(int)
 	Snapshot() int

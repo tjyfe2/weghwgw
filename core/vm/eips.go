@@ -139,11 +139,10 @@ func enable2315(jt *JumpTable) {
 // enable2929 enables "EIP-2929: Gas cost increases for state access opcodes"
 // https://eips.ethereum.org/EIPS/eip-2929
 func enable2929(jt *JumpTable) {
-
 	jt[SSTORE].dynamicGas = gasSStoreEIP2929
 
 	jt[SLOAD].constantGas = WarmStorageReadCostEIP2929
-	jt[SLOAD].dynamicGas = gasSloadEIP2929
+	jt[SLOAD].dynamicGas = gasSLoadEIP2929
 
 	jt[EXTCODECOPY].constantGas = WarmStorageReadCostEIP2929
 	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIP2929

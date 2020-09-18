@@ -113,10 +113,10 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		vmenv   = NewEnv(cfg)
 		sender  = vm.AccountRef(cfg.Origin)
 	)
-	cfg.State.AddAccessListAccount(cfg.Origin)
-	cfg.State.AddAccessListAccount(address)
+	cfg.State.AddAddrToAccessList(cfg.Origin)
+	cfg.State.AddAddrToAccessList(address)
 	for _, addr := range vmenv.ActivePrecompiles() {
-		cfg.State.AddAccessListAccount(addr)
+		cfg.State.AddAddrToAccessList(addr)
 	}
 
 	cfg.State.CreateAccount(address)

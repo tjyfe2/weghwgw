@@ -135,8 +135,8 @@ type (
 		address *common.Address
 	}
 	accessListAddSlotChange struct {
-		slot    *common.Hash
 		address *common.Address
+		slot    *common.Hash
 	}
 )
 
@@ -262,11 +262,9 @@ func (ch accessListAddAccountChange) dirtied() *common.Address {
 
 func (ch accessListAddSlotChange) revert(s *StateDB) {
 	idx, addrOk := s.accessList.addresses[*ch.address]
+	// There are two ways this can fail
 	if !addrOk {
 		panic("reverting slot change, address not present in list")
-	}
-	if idx < 0 {
-		panic("reverting slot change, slot not present list")
 	}
 	slotmap := s.accessList.slots[idx]
 	delete(slotmap, *ch.slot)

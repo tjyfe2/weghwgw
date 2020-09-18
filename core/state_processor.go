@@ -97,13 +97,13 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	vmenv := vm.NewEVM(context, statedb, config, cfg)
 
 	if config.IsYoloV2(header.Number) {
-		statedb.AddAccessListAccount(msg.From())
+		statedb.AddAddrToAccessList(msg.From())
 		if dst := msg.To(); dst != nil {
-			statedb.AddAccessListAccount(*dst)
+			statedb.AddAddrToAccessList(*dst)
 			// If it's a create-tx, the destination will be added inside evm.create
 		}
 		for _, addr := range vmenv.ActivePrecompiles() {
-			statedb.AddAccessListAccount(addr)
+			statedb.AddAddrToAccessList(addr)
 		}
 	}
 
