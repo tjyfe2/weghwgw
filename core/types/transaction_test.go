@@ -50,6 +50,29 @@ var (
 		HomesteadSigner{},
 		common.Hex2Bytes("98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a301"),
 	)
+
+	empty2718Tx = NewBaseTransaction(
+		big.NewInt(1),
+		3,
+		common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"),
+		big.NewInt(10),
+		2000,
+		big.NewInt(1),
+		common.FromHex("5544"),
+	)
+
+	signed2718Tx, _ = NewBaseTransaction(
+		big.NewInt(1),
+		3,
+		common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"),
+		big.NewInt(10),
+		2000,
+		big.NewInt(1),
+		common.FromHex("5544"),
+	).WithSignature(
+		NewYoloSigner(big.NewInt(1)),
+		common.Hex2Bytes("9f12dd34e08a608e8039063a9a9be92d1753e526617d63556728a11db81fe49d56efb2a0be9a267f458f024ad4f5d5ba8aa13c9abc1e2039a14788d4d2839cf001"),
+	)
 )
 
 func TestTransactionSigHash(t *testing.T) {
@@ -68,6 +91,27 @@ func TestTransactionEncode(t *testing.T) {
 		t.Fatalf("encode error: %v", err)
 	}
 	should := common.FromHex("f86103018207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a8255441ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3")
+	if !bytes.Equal(txb, should) {
+		t.Errorf("encoded EIP-2718 transaction RLP mismatch, got %x", txb)
+	}
+}
+
+func Test2718TransactionSigHash(t *testing.T) {
+	yolo := NewYoloSigner(big.NewInt(1))
+	if yolo.Hash(empty2718Tx) != common.HexToHash("002db842922d5611b56c7f6e9c0aa91a1c4f7222fe35ab738cdb0675ffefc321") {
+		t.Errorf("empty EIP-2718 transaction hash mismatch, got %x", emptyTx.Hash())
+	}
+	if yolo.Hash(signed2718Tx) != common.HexToHash("002db842922d5611b56c7f6e9c0aa91a1c4f7222fe35ab738cdb0675ffefc321") {
+		t.Errorf("signed EIP-2718 transaction hash mismatch, got %x", rightvrsTx.Hash())
+	}
+}
+
+func Test2718TransactionEncode(t *testing.T) {
+	txb, err := rlp.EncodeToBytes(signed2718Tx)
+	if err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
+	should := common.FromHex("01f8620103018207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a8255441ca09f12dd34e08a608e8039063a9a9be92d1753e526617d63556728a11db81fe49da056efb2a0be9a267f458f024ad4f5d5ba8aa13c9abc1e2039a14788d4d2839cf0")
 	if !bytes.Equal(txb, should) {
 		t.Errorf("encoded RLP mismatch, got %x", txb)
 	}

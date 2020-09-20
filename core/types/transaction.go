@@ -106,14 +106,37 @@ func (tx *Transaction) EncodeRLP(w io.Writer) error {
 }
 
 func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	var l *LegacyTransaction
-	err := s.Decode(&l)
+	typ := uint64(LegacyTxId)
+	var size uint64
+
+	// If the tx isn't an RLP list, it's likely typed so pop off the first byte.
+	kind, size, err := s.Kind()
+	if err != nil {
+		return err
+	} else if kind != rlp.List {
+		if typ, err = s.Uint(); err != nil {
+			return err
+		}
+	}
+
+	var i inner
+	if typ == LegacyTxId {
+		var l *LegacyTransaction
+		err = s.Decode(&l)
+		i = l
+	} else if typ == BaseTxId {
+		var l *BaseTransaction
+		err = s.Decode(&l)
+		i = l
+	}
+
 	if err == nil {
 		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
 		tx.time = time.Now()
 	}
-	tx.inner = l
+
+	tx.typ = uint8(typ)
+	tx.inner = i
 	return err
 }
 
