@@ -3029,3 +3029,101 @@ func TestInitThenFailCreateContract(t *testing.T) {
 		}
 	}
 }
+
+func TestEIP2718Transition(t *testing.T) {
+	// Configure and generate a sample block chain
+	var (
+		db         = rawdb.NewMemoryDatabase()
+		key, _     = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address    = crypto.PubkeyToAddress(key.PublicKey)
+		funds      = big.NewInt(1000000000)
+		deleteAddr = common.Address{1}
+		gspec      = &Genesis{
+			Config: &params.ChainConfig{ChainID: big.NewInt(1), EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(0), HomesteadBlock: new(big.Int), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(0), ConstantinopleBlock: big.NewInt(0), PetersburgBlock: big.NewInt(0), IstanbulBlock: big.NewInt(0), YoloV1Block: big.NewInt(2)},
+			Alloc:  GenesisAlloc{address: {Balance: funds}, deleteAddr: {Balance: new(big.Int)}},
+		}
+		genesis = gspec.MustCommit(db)
+	)
+
+	blockchain, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+
+	blocks, _ := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 2, func(i int, block *BlockGen) {
+		var (
+			tx       *types.Transaction
+			err      error
+			legacyTx = func(signer types.Signer) (*types.Transaction, error) {
+				return types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{}, new(big.Int), 21000, new(big.Int), nil), signer, key)
+			}
+			baseTx = func(signer types.Signer) (*types.Transaction, error) {
+				return types.SignTx(types.NewBaseTransaction(gspec.Config.ChainID, block.TxNonce(address), common.Address{}, new(big.Int), 21000, new(big.Int), nil), signer, key)
+			}
+		)
+		switch i {
+		case 0:
+			tx, err = legacyTx(types.HomesteadSigner{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			block.AddTx(tx)
+		case 1:
+			tx, err = legacyTx(types.HomesteadSigner{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			block.AddTx(tx)
+
+			tx, err = baseTx(types.NewYoloSigner(gspec.Config.ChainID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			block.AddTx(tx)
+		}
+	})
+
+	if _, err := blockchain.InsertChain(blocks); err != nil {
+		t.Fatal(err)
+	}
+	block := blockchain.GetBlockByNumber(1)
+	if block.Transactions()[0].Type() != types.LegacyTxId {
+		t.Error("Expected block[1].txs[0] to be a legacy tx")
+	}
+	block = blockchain.GetBlockByNumber(2)
+	if block.Transactions()[0].Type() != types.LegacyTxId {
+		t.Error("Expected block[2].txs[0] to be a legacy tx")
+	}
+	if block.Transactions()[1].Type() != types.BaseTxId {
+		t.Error("Expected block[2].txs[1] to be a base tx")
+	}
+	if _, err := blockchain.InsertChain(blocks[2:]); err != nil {
+		t.Fatal(err)
+	}
+
+	blockchain.Stop()
+
+	// submit typed tx before fork block
+	blocks, _ = GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 3, func(i int, block *BlockGen) {
+		var (
+			tx     *types.Transaction
+			err    error
+			baseTx = func(signer types.Signer) (*types.Transaction, error) {
+				return types.SignTx(types.NewBaseTransaction(gspec.Config.ChainID, block.TxNonce(address), common.Address{}, new(big.Int), 21000, new(big.Int), nil), signer, key)
+			}
+		)
+		if i == 2 {
+			tx, err = baseTx(types.NewYoloSigner(gspec.Config.ChainID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			block.AddTx(tx)
+		}
+	})
+
+	config := &params.ChainConfig{ChainID: big.NewInt(1), EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(0), HomesteadBlock: new(big.Int), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(0), ConstantinopleBlock: big.NewInt(0), PetersburgBlock: big.NewInt(0), IstanbulBlock: big.NewInt(0), YoloV1Block: big.NewInt(4)}
+	blockchain, _ = NewBlockChain(db, nil, config, ethash.NewFaker(), vm.Config{}, nil, nil)
+	defer blockchain.Stop()
+
+	_, err := blockchain.InsertChain(blocks)
+	if err != ErrTxTypeInvalid {
+		t.Error("expected error:", ErrTxTypeInvalid)
+	}
+}
