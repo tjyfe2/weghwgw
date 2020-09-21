@@ -69,7 +69,7 @@ func (a *accessList) Copy() *accessList {
 	}
 	for _, slotMap := range a.slots {
 		newSlotmap := make(map[common.Hash]struct{})
-		for k, _ := range slotMap {
+		for k := range slotMap {
 			newSlotmap[k] = struct{}{}
 		}
 		cp.slots = append(cp.slots, newSlotmap)

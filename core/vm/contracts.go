@@ -101,23 +101,22 @@ var PrecompiledContractsYoloV2 = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
 }
 
-
 var PrecompiledAddressesYoloV2 []common.Address
 var PrecompiledAddressesIstanbul []common.Address
 var PrecompiledAddressesByzantium []common.Address
 var PrecompiledAddressesHomestead []common.Address
 
-func init(){
-	for k, _ := range PrecompiledContractsHomestead {
+func init() {
+	for k := range PrecompiledContractsHomestead {
 		PrecompiledAddressesHomestead = append(PrecompiledAddressesHomestead, k)
 	}
-	for k, _ := range PrecompiledContractsByzantium {
+	for k := range PrecompiledContractsByzantium {
 		PrecompiledAddressesHomestead = append(PrecompiledAddressesByzantium, k)
 	}
-	for k, _ := range PrecompiledContractsIstanbul {
+	for k := range PrecompiledContractsIstanbul {
 		PrecompiledAddressesIstanbul = append(PrecompiledAddressesIstanbul, k)
 	}
-	for k, _ := range PrecompiledContractsYoloV2 {
+	for k := range PrecompiledContractsYoloV2 {
 		PrecompiledAddressesYoloV2 = append(PrecompiledAddressesYoloV2, k)
 	}
 }

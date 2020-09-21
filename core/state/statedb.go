@@ -917,6 +917,6 @@ func (s *StateDB) AddrInAccessList(addr common.Address) bool {
 	return s.accessList.ContainsAddr(addr)
 }
 
-func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool)  {
+func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	return s.accessList.Contains(addr, slot)
 }
