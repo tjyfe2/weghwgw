@@ -209,7 +209,7 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	}
 	if original == value {
 		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
-			evm.StateDB.AddRefund(params.SstoreInitRefundEIP2200)
+			evm.StateDB.AddRefund(params.SstoreInitGasEIP2200 - params.SstoreDirtyGasEIP2200)
 		} else { // reset to original existing slot (2.2.2.2)
 			evm.StateDB.AddRefund(params.SstoreCleanRefundEIP2200)
 		}

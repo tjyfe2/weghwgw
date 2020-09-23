@@ -87,7 +87,11 @@ func gasSStoreEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	}
 	if original == value {
 		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
-			evm.StateDB.AddRefund(params.SstoreInitRefundEIP2200)
+			// EIP 2200 Original clause:
+			// 	evm.StateDB.AddRefund(params.SstoreInitGasEIP2200 - params.SstoreDirtyGasEIP2200)
+			// The 2200 definition is "SSTORE_RESET_GAS (20k) - SLOAD_GAS", so here we replace it
+			// with "20K - 100"
+			evm.StateDB.AddRefund(params.SstoreInitGasEIP2200 - WarmStorageReadCostEIP2929)
 		} else { // reset to original existing slot (2.2.2.2)
 			evm.StateDB.AddRefund(params.SstoreCleanRefundEIP2200)
 		}
