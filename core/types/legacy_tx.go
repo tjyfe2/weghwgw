@@ -86,6 +86,10 @@ func (tx *LegacyTransaction) To() *common.Address {
 	return &to
 }
 
+func (tx *LegacyTransaction) AccessList() *AccessList {
+	return nil
+}
+
 // RawSignatureValues returns the V, R, S signature values of the transaction.
 // The return values should not be modified by the caller.
 func (tx *LegacyTransaction) RawSignatureValues() (v, r, s *big.Int) {

@@ -42,7 +42,7 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
-	case config.IsYoloV1(blockNumber):
+	case config.IsYoloV2(blockNumber):
 		signer = NewYoloSigner(config.ChainID)
 	case config.IsEIP155(blockNumber):
 		signer = NewEIP155Signer(config.ChainID)

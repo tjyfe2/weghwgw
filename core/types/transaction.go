@@ -38,7 +38,7 @@ var (
 
 const (
 	LegacyTxId = iota
-	BaseTxId
+	AccessListTxId
 )
 
 type Transaction struct {
@@ -65,6 +65,7 @@ type inner interface {
 	// UnmarshalJSON unmarshals from JSON.
 	UnmarshalJSON(input []byte) error
 
+	AccessList() *AccessList
 	Data() []byte
 	Gas() uint64
 	GasPrice() *big.Int
@@ -124,8 +125,8 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		var l *LegacyTransaction
 		err = s.Decode(&l)
 		i = l
-	} else if typ == BaseTxId {
-		var l *BaseTransaction
+	} else if typ == AccessListTxId {
+		var l *AccessListTransaction
 		err = s.Decode(&l)
 		i = l
 	}
@@ -193,9 +194,10 @@ func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int) error {
 	return nil
 }
 
-func (tx *Transaction) Data() []byte       { return tx.inner.Data() }
-func (tx *Transaction) Gas() uint64        { return tx.inner.Gas() }
-func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.GasPrice()) }
+func (tx *Transaction) Data() []byte            { return tx.inner.Data() }
+func (tx *Transaction) AccessList() *AccessList { return tx.inner.AccessList() }
+func (tx *Transaction) Gas() uint64             { return tx.inner.Gas() }
+func (tx *Transaction) GasPrice() *big.Int      { return new(big.Int).Set(tx.inner.GasPrice()) }
 func (tx *Transaction) GasPriceCmp(other *Transaction) int {
 	return tx.inner.GasPrice().Cmp(other.GasPrice())
 }
@@ -260,9 +262,9 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 			inner: cpy,
 			time:  tx.time,
 		}
-	} else if tx.typ == BaseTxId {
-		inner := tx.inner.(*BaseTransaction)
-		cpy := &BaseTransaction{
+	} else if tx.typ == AccessListTxId {
+		inner := tx.inner.(*AccessListTransaction)
+		cpy := &AccessListTransaction{
 			Chain:        inner.Chain,
 			AccountNonce: inner.AccountNonce,
 			Price:        inner.Price,
@@ -278,7 +280,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 		cpy.R, cpy.S, cpy.V = r, s, v
 
 		ret = &Transaction{
-			typ:   BaseTxId,
+			typ:   AccessListTxId,
 			inner: cpy,
 			time:  tx.time,
 		}
@@ -439,10 +441,11 @@ type Message struct {
 	gasLimit   uint64
 	gasPrice   *big.Int
 	data       []byte
+	accessList *AccessList
 	checkNonce bool
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accessList *AccessList, checkNonce bool) Message {
 	return Message{
 		from:       from,
 		to:         to,
@@ -451,6 +454,7 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		gasLimit:   gasLimit,
 		gasPrice:   gasPrice,
 		data:       data,
+		accessList: accessList,
 		checkNonce: checkNonce,
 	}
 }
@@ -464,6 +468,7 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 		to:         tx.To(),
 		amount:     tx.Value(),
 		data:       tx.Data(),
+		accessList: tx.AccessList(),
 		checkNonce: true,
 	}
 
