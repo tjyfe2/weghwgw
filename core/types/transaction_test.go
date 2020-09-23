@@ -51,7 +51,7 @@ var (
 		common.Hex2Bytes("98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a301"),
 	)
 
-	empty2718Tx = NewBaseTransaction(
+	empty2718Tx = NewAccessListTransaction(
 		big.NewInt(1),
 		3,
 		common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"),
@@ -59,9 +59,10 @@ var (
 		2000,
 		big.NewInt(1),
 		common.FromHex("5544"),
+		nil,
 	)
 
-	signed2718Tx, _ = NewBaseTransaction(
+	signed2718Tx, _ = NewAccessListTransaction(
 		big.NewInt(1),
 		3,
 		common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"),
@@ -69,6 +70,7 @@ var (
 		2000,
 		big.NewInt(1),
 		common.FromHex("5544"),
+		nil,
 	).WithSignature(
 		NewYoloSigner(big.NewInt(1)),
 		common.Hex2Bytes("9f12dd34e08a608e8039063a9a9be92d1753e526617d63556728a11db81fe49d56efb2a0be9a267f458f024ad4f5d5ba8aa13c9abc1e2039a14788d4d2839cf001"),

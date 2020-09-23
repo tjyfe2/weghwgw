@@ -3039,7 +3039,7 @@ func TestEIP2718Transition(t *testing.T) {
 		funds      = big.NewInt(1000000000)
 		deleteAddr = common.Address{1}
 		gspec      = &Genesis{
-			Config: &params.ChainConfig{ChainID: big.NewInt(1), EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(0), HomesteadBlock: new(big.Int), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(0), ConstantinopleBlock: big.NewInt(0), PetersburgBlock: big.NewInt(0), IstanbulBlock: big.NewInt(0), YoloV1Block: big.NewInt(2)},
+			Config: &params.ChainConfig{ChainID: big.NewInt(1), EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(0), HomesteadBlock: new(big.Int), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(0), ConstantinopleBlock: big.NewInt(0), PetersburgBlock: big.NewInt(0), IstanbulBlock: big.NewInt(0), YoloV2Block: big.NewInt(2)},
 			Alloc:  GenesisAlloc{address: {Balance: funds}, deleteAddr: {Balance: new(big.Int)}},
 		}
 		genesis = gspec.MustCommit(db)
@@ -3055,7 +3055,7 @@ func TestEIP2718Transition(t *testing.T) {
 				return types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{}, new(big.Int), 21000, new(big.Int), nil), signer, key)
 			}
 			baseTx = func(signer types.Signer) (*types.Transaction, error) {
-				return types.SignTx(types.NewBaseTransaction(gspec.Config.ChainID, block.TxNonce(address), common.Address{}, new(big.Int), 21000, new(big.Int), nil), signer, key)
+				return types.SignTx(types.NewAccessListTransaction(gspec.Config.ChainID, block.TxNonce(address), common.Address{}, new(big.Int), 21000, new(big.Int), nil, nil), signer, key)
 			}
 		)
 		switch i {
@@ -3091,7 +3091,7 @@ func TestEIP2718Transition(t *testing.T) {
 	if block.Transactions()[0].Type() != types.LegacyTxId {
 		t.Error("Expected block[2].txs[0] to be a legacy tx")
 	}
-	if block.Transactions()[1].Type() != types.BaseTxId {
+	if block.Transactions()[1].Type() != types.AccessListTxId {
 		t.Error("Expected block[2].txs[1] to be a base tx")
 	}
 	if _, err := blockchain.InsertChain(blocks[2:]); err != nil {
@@ -3106,7 +3106,7 @@ func TestEIP2718Transition(t *testing.T) {
 			tx     *types.Transaction
 			err    error
 			baseTx = func(signer types.Signer) (*types.Transaction, error) {
-				return types.SignTx(types.NewBaseTransaction(gspec.Config.ChainID, block.TxNonce(address), common.Address{}, new(big.Int), 21000, new(big.Int), nil), signer, key)
+				return types.SignTx(types.NewAccessListTransaction(gspec.Config.ChainID, block.TxNonce(address), common.Address{}, new(big.Int), 21000, new(big.Int), nil, nil), signer, key)
 			}
 		)
 		if i == 2 {
@@ -3118,7 +3118,7 @@ func TestEIP2718Transition(t *testing.T) {
 		}
 	})
 
-	config := &params.ChainConfig{ChainID: big.NewInt(1), EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(0), HomesteadBlock: new(big.Int), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(0), ConstantinopleBlock: big.NewInt(0), PetersburgBlock: big.NewInt(0), IstanbulBlock: big.NewInt(0), YoloV1Block: big.NewInt(4)}
+	config := &params.ChainConfig{ChainID: big.NewInt(1), EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(0), HomesteadBlock: new(big.Int), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(0), ConstantinopleBlock: big.NewInt(0), PetersburgBlock: big.NewInt(0), IstanbulBlock: big.NewInt(0), YoloV2Block: big.NewInt(4)}
 	blockchain, _ = NewBlockChain(db, nil, config, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer blockchain.Stop()
 

@@ -92,13 +92,13 @@ func Test2718BlockEncoding(t *testing.T) {
 
 	tx1 := NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(10), 50000, big.NewInt(10), nil)
 	tx1, _ = tx1.WithSignature(HomesteadSigner{}, common.Hex2Bytes("9bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094f8a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b100"))
-	tx2 := NewBaseTransaction(big.NewInt(1), 0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 123457, big.NewInt(10), nil)
+	tx2 := NewAccessListTransaction(big.NewInt(1), 0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 123457, big.NewInt(10), nil, nil)
 	tx2, _ = tx2.WithSignature(NewYoloSigner(big.NewInt(1)), common.Hex2Bytes("9709de6f91994cb3f52ce00ad011595fd653d5f10f7c9121a79728bcfc4ac75b531c1ca9d6309e74ea3469327d43c41118480d2521d2f922bca70b7f7a4d7e2f01"))
 
 	check("len(Transactions)", len(block.Transactions()), 2)
 	check("Transactions[0].Hash", block.Transactions()[0].Hash(), tx1.Hash())
 	check("Transactions[1].Hash", block.Transactions()[1].Hash(), tx2.Hash())
-	check("Transactions[1].Type()", block.Transactions()[1].Type(), uint8(BaseTxId))
+	check("Transactions[1].Type()", block.Transactions()[1].Type(), uint8(AccessListTxId))
 
 	ourBlockEnc, err := rlp.EncodeToBytes(&block)
 	if err != nil {

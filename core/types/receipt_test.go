@@ -157,7 +157,7 @@ func TestDeriveFields(t *testing.T) {
 	txs := Transactions{
 		NewContractCreation(1, big.NewInt(1), 1, big.NewInt(1), nil),
 		NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil),
-		NewBaseTransaction(big.NewInt(3), 3, common.HexToAddress("0x3"), big.NewInt(3), 3, big.NewInt(3), nil),
+		NewAccessListTransaction(big.NewInt(3), 3, common.HexToAddress("0x3"), big.NewInt(3), 3, big.NewInt(3), nil, nil),
 	}
 	// Create the corresponding receipts
 	receipts := Receipts{
@@ -184,7 +184,7 @@ func TestDeriveFields(t *testing.T) {
 			GasUsed:         2,
 		},
 		&Receipt{
-			Type:              BaseTxId,
+			Type:              AccessListTxId,
 			PostState:         common.Hash{3}.Bytes(),
 			CumulativeGasUsed: 6,
 			Logs: []*Log{
