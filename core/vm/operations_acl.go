@@ -166,28 +166,21 @@ func gasEip2929AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 
 func makeCallVariantGasCalEip2929(oldCalculator gasFunc) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-		gas := uint64(0)
 		addr := common.Address(stack.Back(1).Bytes20())
 		// Check slot presence in the access list
 		if !evm.StateDB.AddrInAccessList(addr) {
 			evm.StateDB.AddAddrToAccessList(addr)
-			// Eip2929WarmStorageReadCost is already deducted in the form of a constant cost
-			gas = ColdAccountAccessCostEIP2929 - WarmStorageReadCostEIP2929
+			// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost
+			if !contract.UseGas(ColdAccountAccessCostEIP2929 - WarmStorageReadCostEIP2929) {
+				return 0, ErrOutOfGas
+			}
 		}
 		// Now call the old calculator, which takes into account
 		// - create new account
 		// - transfer value
 		// - memory expansion
 		// - 63/64ths rule
-		gasB, err := oldCalculator(evm, contract, stack, mem, memorySize)
-		if err != nil {
-			return 0, err
-		}
-		var overflow bool
-		if gas, overflow = math.SafeAdd(gas, gasB); overflow {
-			return 0, ErrGasUintOverflow
-		}
-		return gas, nil
+		return oldCalculator(evm, contract, stack, mem, memorySize)
 	}
 }
 
