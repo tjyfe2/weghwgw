@@ -723,9 +723,9 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	//benchmarkNonModifyingCode(10000000, loopingCode, "loop-10M", b)
 }
 
-// TestEip9999Cases contains various testcases that are used for the (TODO @holiman)
-// EIP about gas repricings
-func TestEip9999Cases(t *testing.T) {
+// TestEip2929Cases contains various testcases that are used for
+// EIP-2929 about gas repricings
+func TestEip2929Cases(t *testing.T) {
 
 	id := 1
 	prettyPrint := func(comment string, code []byte) {
@@ -749,7 +749,7 @@ func TestEip9999Cases(t *testing.T) {
 			EVMConfig: vm.Config{
 				Debug:     true,
 				Tracer:    vm.NewMarkdownLogger(nil, os.Stdout),
-				ExtraEips: []int{9999},
+				ExtraEips: []int{2929},
 			},
 		})
 	}
