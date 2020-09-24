@@ -106,6 +106,12 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 			statedb.AddAddressToAccessList(*dst)
 			// If it's a create-tx, the destination will be added inside evm.create
 		}
+		for _, el := range *msg.AccessList() {
+			statedb.AddAddrToAccessList(*el.Address)
+			for _, key := range el.StorageKeys {
+				statedb.AddSlotToAccessList(*el.Address, *key)
+			}
+		}
 		for _, addr := range vmenv.ActivePrecompiles() {
 			statedb.AddAddressToAccessList(addr)
 		}

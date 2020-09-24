@@ -68,6 +68,7 @@ type Message interface {
 	Nonce() uint64
 	CheckNonce() bool
 	Data() []byte
+	AccessList() *types.AccessList
 }
 
 // ExecutionResult includes all output after executing given evm
@@ -151,13 +152,14 @@ func IntrinsicGas(data []byte, accessList *types.AccessList, isContractCreation 
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
-		gp:       gp,
-		evm:      evm,
-		msg:      msg,
-		gasPrice: msg.GasPrice(),
-		value:    msg.Value(),
-		data:     msg.Data(),
-		state:    evm.StateDB,
+		gp:         gp,
+		evm:        evm,
+		msg:        msg,
+		gasPrice:   msg.GasPrice(),
+		value:      msg.Value(),
+		data:       msg.Data(),
+		state:      evm.StateDB,
+		accessList: msg.AccessList(),
 	}
 }
 

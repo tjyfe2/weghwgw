@@ -154,9 +154,9 @@ func (s YoloSigner) Hash(tx *Transaction) common.Hash {
 			tx.Data(),
 			s.chainId, uint(0), uint(0),
 		})
-	} else {
+	} else if tx.typ == AccessListTxId {
 		h = rlpHash([]interface{}{
-			tx.typ,
+			tx.Type(),
 			tx.ChainId(),
 			tx.Nonce(),
 			tx.GasPrice(),
@@ -164,6 +164,7 @@ func (s YoloSigner) Hash(tx *Transaction) common.Hash {
 			tx.To(),
 			tx.Value(),
 			tx.Data(),
+			tx.AccessList(),
 		})
 	}
 

@@ -272,6 +272,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 			Recipient:    inner.Recipient,
 			Amount:       inner.Amount,
 			Payload:      inner.Payload,
+			Accesses:     inner.Accesses,
 
 			V: inner.V,
 			R: inner.R,
@@ -477,11 +478,12 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	return msg, err
 }
 
-func (m Message) From() common.Address { return m.from }
-func (m Message) To() *common.Address  { return m.to }
-func (m Message) GasPrice() *big.Int   { return m.gasPrice }
-func (m Message) Value() *big.Int      { return m.amount }
-func (m Message) Gas() uint64          { return m.gasLimit }
-func (m Message) Nonce() uint64        { return m.nonce }
-func (m Message) Data() []byte         { return m.data }
-func (m Message) CheckNonce() bool     { return m.checkNonce }
+func (m Message) From() common.Address    { return m.from }
+func (m Message) To() *common.Address     { return m.to }
+func (m Message) GasPrice() *big.Int      { return m.gasPrice }
+func (m Message) Value() *big.Int         { return m.amount }
+func (m Message) Gas() uint64             { return m.gasLimit }
+func (m Message) Nonce() uint64           { return m.nonce }
+func (m Message) Data() []byte            { return m.data }
+func (m Message) AccessList() *AccessList { return m.accessList }
+func (m Message) CheckNonce() bool        { return m.checkNonce }
