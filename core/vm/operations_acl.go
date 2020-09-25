@@ -94,7 +94,10 @@ func gasSStoreEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		} else { // reset to original existing slot (2.2.2.2)
 			// EIP 2200 Original clause:
 			//	evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.SloadGasEIP2200)
-			evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - WarmStorageReadCostEIP2929)
+			// - SSTORE_RESET_GAS redefined as (5000 - COLD_SLOAD_COST)
+			// - SLOAD_GAS redefined as WARM_STORAGE_READ_COST
+			// Final: (5000 - COLD_SLOAD_COST) - WARM_STORAGE_READ_COST
+			evm.StateDB.AddRefund((params.SstoreResetGasEIP2200 - ColdSloadCostEIP2929) - WarmStorageReadCostEIP2929)
 		}
 	}
 	// EIP-2200 original clause:
