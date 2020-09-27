@@ -130,7 +130,14 @@ func (s YoloSigner) Sender(tx *Transaction) (common.Address, error) {
 	if tx.ChainId().Cmp(s.chainId) != 0 {
 		return common.Address{}, ErrInvalidChainId
 	}
+
 	V, R, S := tx.RawSignatureValues()
+
+	if tx.Type() == LegacyTxId {
+		V = new(big.Int).Sub(V, s.chainIdMul)
+		V.Sub(V, big8)
+	}
+
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
