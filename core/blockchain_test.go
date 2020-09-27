@@ -3064,14 +3064,13 @@ func TestEIP2718Transition(t *testing.T) {
 	)
 
 	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *BlockGen) {
-		zero := common.HexToHash("0x00")
 		b.SetCoinbase(common.Address{1})
 
 		// One transaction to AAAA
 		accesses := types.AccessList{types.AccessTuple{
 			Address: &aa,
 			StorageKeys: []*common.Hash{
-				&zero,
+				{0},
 			},
 		}}
 
