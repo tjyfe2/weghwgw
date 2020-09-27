@@ -3043,7 +3043,7 @@ func TestEIP2718Transition(t *testing.T) {
 		address = crypto.PubkeyToAddress(key.PublicKey)
 		funds   = big.NewInt(1000000000)
 		gspec   = &Genesis{
-			Config: params.TestChainConfig,
+			Config: params.YoloV2ChainConfig,
 			Alloc: GenesisAlloc{
 				address: {Balance: funds},
 				// The address 0xAAAAA selfdestructs if called
@@ -3051,6 +3051,8 @@ func TestEIP2718Transition(t *testing.T) {
 					// Code needs to just selfdestruct
 					Code: []byte{
 						byte(vm.PC),
+						byte(vm.PC),
+						byte(vm.SLOAD),
 						byte(vm.SLOAD),
 					},
 					Nonce:   0,
@@ -3061,7 +3063,7 @@ func TestEIP2718Transition(t *testing.T) {
 		genesis = gspec.MustCommit(db)
 	)
 
-	blocks, _ := GenerateChain(params.TestChainConfig, genesis, engine, db, 1, func(i int, b *BlockGen) {
+	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *BlockGen) {
 		zero := common.HexToHash("0x00")
 		b.SetCoinbase(common.Address{1})
 
@@ -3073,8 +3075,8 @@ func TestEIP2718Transition(t *testing.T) {
 			},
 		}}
 
-		tx := types.NewAccessListTransaction(big.NewInt(1), 0, aa, big.NewInt(0), 30000, big.NewInt(1), nil, &accesses)
-		tx, _ = types.SignTx(tx, types.NewYoloSigner(big.NewInt(1)), key)
+		tx := types.NewAccessListTransaction(gspec.Config.ChainID, 0, aa, big.NewInt(0), 30000, big.NewInt(1), nil, &accesses)
+		tx, _ = types.SignTx(tx, types.NewYoloSigner(gspec.Config.ChainID), key)
 
 		b.AddTx(tx)
 	})
@@ -3082,7 +3084,7 @@ func TestEIP2718Transition(t *testing.T) {
 	diskdb := rawdb.NewMemoryDatabase()
 	gspec.MustCommit(diskdb)
 
-	chain, err := NewBlockChain(diskdb, nil, params.TestChainConfig, engine, vm.Config{}, nil, nil)
+	chain, err := NewBlockChain(diskdb, nil, gspec.Config, engine, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -3092,8 +3094,8 @@ func TestEIP2718Transition(t *testing.T) {
 
 	block := chain.GetBlockByNumber(1)
 
-	// 25402 = (21000 + 2400 + 1900) + 2 + 100
-	if block.GasUsed() != 25402 {
+	expected := params.TxGas + params.TxAccessListAddress + params.TxAccessListStorageKey + vm.GasQuickStep*2 + vm.WarmStorageReadCostEIP2929 + vm.ColdSloadCostEIP2929
+	if block.GasUsed() != expected {
 		t.Fatalf("incorrect amount of gas spent: expected %d, got %d", 25402, block.GasUsed())
 
 	}
