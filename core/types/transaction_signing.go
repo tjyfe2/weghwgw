@@ -43,7 +43,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
 	case config.IsYoloV2(blockNumber):
-		signer = NewYoloSigner(config.ChainID)
+		signer = NewEIP2718Signer(config.ChainID)
 	case config.IsEIP155(blockNumber):
 		signer = NewEIP155Signer(config.ChainID)
 	case config.IsHomestead(blockNumber):
@@ -104,26 +104,17 @@ type Signer interface {
 	Equal(Signer) bool
 }
 
-// HomesteadTransaction implements TransactionInterface using the
-// homestead rules.
-type YoloSigner struct{ chainId, chainIdMul *big.Int }
+type EIP2718Signer struct{ EIP155Signer }
 
-func NewYoloSigner(chainId *big.Int) YoloSigner {
-	if chainId == nil {
-		chainId = new(big.Int)
-	}
-	return YoloSigner{
-		chainId:    chainId,
-		chainIdMul: new(big.Int).Mul(chainId, big.NewInt(2)),
+func NewEIP2718Signer(chainId *big.Int) EIP2718Signer {
+	return EIP2718Signer{
+		NewEIP155Signer(chainId),
 	}
 }
 
-func (s YoloSigner) Equal(s2 Signer) bool {
-	eip155, ok := s2.(EIP155Signer)
-	return ok && eip155.chainId.Cmp(s.chainId) == 0
-}
-
-func (s YoloSigner) Sender(tx *Transaction) (common.Address, error) {
+// Sender returns the recovered addressed from a transaction's signature.
+// It assumes V does not store the chain id, unless the tx is of legacy type.
+func (s EIP2718Signer) Sender(tx *Transaction) (common.Address, error) {
 	if !tx.Protected() {
 		return HomesteadSigner{}.Sender(tx)
 	}
@@ -141,15 +132,22 @@ func (s YoloSigner) Sender(tx *Transaction) (common.Address, error) {
 	return recoverPlain(s.Hash(tx), R, S, V, true)
 }
 
-// SignatureValues returns signature values. This signature
-// needs to be in the [R || S || V] format where V is 0 or 1.
-func (s YoloSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
-	return HomesteadSigner{}.SignatureValues(tx, sig)
+// SignatureValues returns signature values.
+func (s EIP2718Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+	R, S, V, err = HomesteadSigner{}.SignatureValues(tx, sig)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if tx.Type() == LegacyTxId && s.chainId.Sign() != 0 {
+		V = big.NewInt(int64(sig[64] + 35))
+		V.Add(V, s.chainIdMul)
+	}
+	return R, S, V, nil
 }
 
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
-func (s YoloSigner) Hash(tx *Transaction) common.Hash {
+func (s EIP2718Signer) Hash(tx *Transaction) common.Hash {
 	var h common.Hash
 	if tx.typ == LegacyTxId {
 		h = rlpHash([]interface{}{

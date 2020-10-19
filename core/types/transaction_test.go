@@ -72,7 +72,7 @@ var (
 		common.FromHex("5544"),
 		nil,
 	).WithSignature(
-		NewYoloSigner(big.NewInt(1)),
+		NewEIP2718Signer(big.NewInt(1)),
 		common.Hex2Bytes("c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b266032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d3752101"),
 	)
 )
@@ -99,7 +99,7 @@ func TestTransactionEncode(t *testing.T) {
 }
 
 func Test2718TransactionSigHash(t *testing.T) {
-	yolo := NewYoloSigner(big.NewInt(1))
+	yolo := NewEIP2718Signer(big.NewInt(1))
 	if yolo.Hash(empty2718Tx) != common.HexToHash("c44faa8f50803df8edd97e72c4dbae32343b2986c91e382fc3e329e6c9a36f31") {
 		t.Errorf("empty EIP-2718 transaction hash mismatch, got %x", emptyTx.Hash())
 	}

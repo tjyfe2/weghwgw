@@ -100,7 +100,7 @@ func Test2718BlockEncoding(t *testing.T) {
 		},
 	}}
 	tx2 := NewAccessListTransaction(big.NewInt(1), 0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(0), 123457, big.NewInt(10), nil, &accesses)
-	tx2, _ = tx2.WithSignature(NewYoloSigner(big.NewInt(1)), common.Hex2Bytes("78b8236a3b26d56c7d4ba94a36e64c5ea086619e489c005ece0ac7bd8356be222fea9f3d5aaff74ac1e996e590f7152ea74ed300c59909b2921b73237c7b069201"))
+	tx2, _ = tx2.WithSignature(NewEIP2718Signer(big.NewInt(1)), common.Hex2Bytes("78b8236a3b26d56c7d4ba94a36e64c5ea086619e489c005ece0ac7bd8356be222fea9f3d5aaff74ac1e996e590f7152ea74ed300c59909b2921b73237c7b069201"))
 
 	check("len(Transactions)", len(block.Transactions()), 2)
 	check("Transactions[0].Hash", block.Transactions()[0].Hash(), tx1.Hash())

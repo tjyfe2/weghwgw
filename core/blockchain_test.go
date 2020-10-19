@@ -3075,7 +3075,7 @@ func TestEIP2718Transition(t *testing.T) {
 		}}
 
 		tx := types.NewAccessListTransaction(gspec.Config.ChainID, 0, aa, big.NewInt(0), 30000, big.NewInt(1), nil, &accesses)
-		tx, _ = types.SignTx(tx, types.NewYoloSigner(gspec.Config.ChainID), key)
+		tx, _ = types.SignTx(tx, types.NewEIP2718Signer(gspec.Config.ChainID), key)
 
 		b.AddTx(tx)
 	})
