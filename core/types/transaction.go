@@ -263,6 +263,71 @@ func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) { return tx.inner
 // Transactions is a Transaction slice type for basic sorting.
 type Transactions []*Transaction
 
+// EncodeRLP implements rlp.Encoder
+func (txs Transactions) EncodeRLP(w io.Writer) error {
+	for _, tx := range txs {
+		if tx.typ == LegacyTxId {
+			return rlp.Encode(w, tx.inner)
+		} else {
+			bytes, err := rlp.EncodeToBytes(tx)
+			if err != nil {
+				return err
+			}
+			if err := rlp.Encode(w, bytes); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// DecodeRLP implements rlp.Decoder
+func (txs Transactions) DecodeRLP(s *rlp.Stream) error {
+	for {
+		kind, size, err := s.Kind()
+		if err == rlp.EOL {
+			return nil
+		} else if err != nil {
+			return err
+		}
+
+		tx := Transaction{typ: LegacyTxId}
+
+		// Legacy transactions are decoded from lists, while typed
+		// transactions are decoded from byte strings.
+		if kind == rlp.List {
+			var i *LegacyTransaction
+			if err := s.Decode(&i); err != nil {
+				return err
+			}
+			tx.inner = i
+		} else if kind == rlp.String {
+			bytes, err := s.Bytes()
+			size = uint64(len(bytes))
+			if err != nil {
+				return err
+			}
+			tx.typ = bytes[0]
+			if tx.typ == AccessListTxId {
+				var i *AccessListTransaction
+				if err := rlp.DecodeBytes(bytes, i); err != nil {
+					return err
+				}
+				tx.inner = i
+			} else {
+				return ErrTxTypeNotSupported
+			}
+		}
+
+		// rlp.ListSize will return to correct total size for both an
+		// RLP list and an RLP byte string.
+		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
+		tx.time = time.Now()
+		txs = append(txs, &tx)
+	}
+}
+
 // Len returns the length of s.
 func (s Transactions) Len() int { return len(s) }
 
