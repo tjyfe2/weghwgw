@@ -147,6 +147,16 @@ func rlpHash(x interface{}) (h common.Hash) {
 	return h
 }
 
+func typedHash(typ uint8, x interface{}) (h common.Hash) {
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
+	sha.Reset()
+	sha.Write([]byte{typ})
+	rlp.Encode(sha, x)
+	sha.Read(h[:])
+	return h
+}
+
 // EmptyBody returns true if there is no additional 'body' to complete the header
 // that is: no transactions and no uncles.
 func (h *Header) EmptyBody() bool {
