@@ -19,6 +19,7 @@ package types
 import (
 	"container/heap"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"sync/atomic"
@@ -267,7 +268,9 @@ type Transactions []*Transaction
 func (txs Transactions) EncodeRLP(w io.Writer) error {
 	for _, tx := range txs {
 		if tx.typ == LegacyTxId {
-			return rlp.Encode(w, tx.inner)
+			if err := rlp.Encode(w, tx.inner); err != nil {
+				return err
+			}
 		} else {
 			bytes, err := rlp.EncodeToBytes(tx)
 			if err != nil {
@@ -284,6 +287,7 @@ func (txs Transactions) EncodeRLP(w io.Writer) error {
 
 // DecodeRLP implements rlp.Decoder
 func (txs Transactions) DecodeRLP(s *rlp.Stream) error {
+	fmt.Println("DECODING RLP")
 	for {
 		kind, size, err := s.Kind()
 		if err == rlp.EOL {
@@ -294,11 +298,14 @@ func (txs Transactions) DecodeRLP(s *rlp.Stream) error {
 
 		tx := Transaction{typ: LegacyTxId}
 
+		fmt.Println("hello")
+
 		// Legacy transactions are decoded from lists, while typed
 		// transactions are decoded from byte strings.
 		if kind == rlp.List {
 			var i *LegacyTransaction
 			if err := s.Decode(&i); err != nil {
+				fmt.Println("oh no")
 				return err
 			}
 			tx.inner = i
@@ -306,12 +313,13 @@ func (txs Transactions) DecodeRLP(s *rlp.Stream) error {
 			bytes, err := s.Bytes()
 			size = uint64(len(bytes))
 			if err != nil {
+
 				return err
 			}
 			tx.typ = bytes[0]
 			if tx.typ == AccessListTxId {
 				var i *AccessListTransaction
-				if err := rlp.DecodeBytes(bytes, i); err != nil {
+				if err := rlp.DecodeBytes(bytes[1:], &i); err != nil {
 					return err
 				}
 				tx.inner = i
