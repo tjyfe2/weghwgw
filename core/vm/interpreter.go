@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"bufio"
+	"fmt"
 	"hash"
 	"sync/atomic"
 
@@ -198,6 +200,14 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		}()
 	}
+
+	var w *bufio.Writer
+	if in.evm.opTrace != nil {
+		w = bufio.NewWriter(in.evm.opTrace)
+		w.WriteString(fmt.Sprintln(contract.Address().Hex()))
+		defer w.Flush()
+	}
+
 	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
 	// the execution of one of the operations or until the done flag is set by the
@@ -216,6 +226,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
+
+		// dumb trace
+		if in.evm.opTrace != nil {
+			w.WriteString(fmt.Sprintln(op))
+		}
+
 		operation := in.cfg.JumpTable[op]
 		if operation == nil {
 			return nil, &ErrInvalidOpCode{opcode: op}
