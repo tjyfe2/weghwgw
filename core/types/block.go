@@ -88,9 +88,8 @@ type Header struct {
 func (h *Header) EncodeRLP(w io.Writer) error {
 	if h.BaseFee == nil {
 		return rlp.Encode(w, extheader(*h))
-	} else {
-		return rlp.Encode(w, ext1559header(*h))
 	}
+	return rlp.Encode(w, ext1559header(*h))
 }
 
 func (h *Header) DecodeRLP(s *rlp.Stream) error {
