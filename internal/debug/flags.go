@@ -19,6 +19,7 @@ package debug
 import (
 	"fmt"
 	"io"
+	"log/syslog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -49,6 +50,15 @@ var (
 	logjsonFlag = cli.BoolFlag{
 		Name:  "log.json",
 		Usage: "Format logs with JSON",
+	}
+	logSyslogFlag = cli.BoolFlag{
+		Name:  "log.syslog",
+		Usage: "Write logs to syslog",
+	}
+	logSyslogTag = cli.StringFlag{
+		Name:  "log.syslog.tag",
+		Usage: "Log prefix to differentiate from other processes. Defaults to the name of the binary.",
+		Value: "",
 	}
 	backtraceAtFlag = cli.StringFlag{
 		Name:  "log.backtrace",
@@ -130,6 +140,8 @@ var Flags = []cli.Flag{
 	verbosityFlag,
 	vmoduleFlag,
 	logjsonFlag,
+	logSyslogFlag,
+	logSyslogTag,
 	backtraceAtFlag,
 	debugFlag,
 	pprofFlag,
@@ -165,14 +177,26 @@ func init() {
 func Setup(ctx *cli.Context) error {
 	var ostream log.Handler
 	output := io.Writer(os.Stderr)
+
+	// Set formatter
+	usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+	formatter := log.TerminalFormat(usecolor)
 	if ctx.GlobalBool(logjsonFlag.Name) {
-		ostream = log.StreamHandler(output, log.JSONFormat())
+		formatter = log.JSONFormat()
+	}
+
+	// Set handler
+	if ctx.GlobalBool(logSyslogFlag.Name) {
+		h, err := log.SyslogHandler(syslog.LOG_INFO, ctx.GlobalString(logSyslogTag.Name), formatter)
+		if err != nil {
+			return err
+		}
+		ostream = h
 	} else {
-		usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 		if usecolor {
 			output = colorable.NewColorableStderr()
 		}
-		ostream = log.StreamHandler(output, log.TerminalFormat(usecolor))
+		ostream = log.StreamHandler(output, formatter)
 	}
 	glogger.SetHandler(ostream)
 
