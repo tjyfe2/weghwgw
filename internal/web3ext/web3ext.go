@@ -21,6 +21,7 @@ var Modules = map[string]string{
 	"admin":    AdminJs,
 	"clique":   CliqueJs,
 	"ethash":   EthashJs,
+	"engine":   EngineJs,
 	"debug":    DebugJs,
 	"eth":      EthJs,
 	"miner":    MinerJs,
@@ -117,6 +118,38 @@ web3._extend({
 });
 `
 
+const EngineJs = `
+web3._extend({
+	property: 'engine',
+	methods: [
+		new web3._extend.Method({
+			name: 'preparePayload',
+			call: 'engine_preparePayload',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getPayload',
+			call: 'engine_getPayload',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'executePayload',
+			call: 'engine_executePayload',
+			params: 1,
+		}),
+		new web3._extend.Method({
+			name: 'consensusValidated',
+			call: 'engine_consensusValidated',
+			params: 1,
+		}),
+		new web3._extend.Method({
+			name: 'forkchoiceUpdated',
+			call: 'engine_forkchoiceUpdated',
+			params: 1,
+		}),
+	]
+});
+`
 const AdminJs = `
 web3._extend({
 	property: 'admin',
