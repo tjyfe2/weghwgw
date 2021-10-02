@@ -1522,7 +1522,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		}
 		status = CanonStatTy
 	} else {
-		status = SideStatTy
+		if externTd.Cmp(common.Big0) == 0 {
+			status = CanonStatTy
+		} else {
+			status = SideStatTy
+		}
 	}
 	// Set new head.
 	if status == CanonStatTy {
