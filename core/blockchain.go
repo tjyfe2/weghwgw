@@ -1513,6 +1513,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			reorg = !currentPreserve && (blockPreserve || mrand.Float64() < 0.5)
 		}
 	}
+	log.Info("inner insert", "reorg", reorg)
 	if reorg {
 		// Reorganise the chain if the parent is not the head block
 		if block.ParentHash() != currentBlock.Hash() {
