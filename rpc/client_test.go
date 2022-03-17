@@ -34,6 +34,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 func TestClientRequest(t *testing.T) {
@@ -663,6 +664,80 @@ func TestClientReconnect(t *testing.T) {
 	t.Logf("%d errors, last error: %v", errcount, err)
 	if errcount > 1 {
 		t.Errorf("expected one error after disconnect, got %d", errcount)
+	}
+}
+
+func TestClientHTTPJwt(t *testing.T) {
+	var (
+		srv          = newTestServer()
+		secret       = []byte("secret")
+		parseSuccess = false
+	)
+
+	jwtHandler := func(fn func(w http.ResponseWriter, r *http.Request)) http.HandlerFunc {
+		return http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				var (
+					token   = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+					claims  jwt.RegisteredClaims
+					keyFunc = func(jwt *jwt.Token) (interface{}, error) {
+						return secret, nil
+					}
+					methods = jwt.WithValidMethods([]string{"HS256"})
+				)
+				if _, err := jwt.ParseWithClaims(token, &claims, keyFunc, methods); err == nil {
+					parseSuccess = true
+				}
+				fn(w, r)
+			})
+	}
+
+	httpsrv := httptest.NewServer(jwtHandler(srv.ServeHTTP))
+	wssrv := httptest.NewServer(jwtHandler(srv.WebsocketHandler([]string{"*"}).ServeHTTP))
+	defer srv.Stop()
+	defer httpsrv.Close()
+	defer wssrv.Close()
+
+	dialAndCall := func(ctx context.Context, transport string, secret []byte) {
+		var (
+			client *Client
+			err    error
+		)
+		switch transport {
+		case "http":
+			client, err = Dial(httpsrv.URL, secret)
+		case "ws":
+			client, err = DialWebsocket(ctx, "ws"+wssrv.URL[4:], "*", secret)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer client.Close()
+		if err := client.Call(nil, "test_sleep", 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	type testCase struct {
+		transport string
+		secret    []byte
+		success   bool
+	}
+
+	tests := []testCase{
+		{transport: "http", secret: nil, success: false},
+		{transport: "http", secret: secret, success: true},
+		{transport: "ws", secret: nil, success: false},
+		{transport: "ws", secret: secret, success: true},
+	}
+
+	ctx := context.Background()
+	for i, test := range tests {
+		parseSuccess = false
+		dialAndCall(ctx, test.transport, test.secret)
+		if parseSuccess != test.success {
+			t.Fatalf("test %d: client did not correctly use jwt", i)
+		}
 	}
 }
 
