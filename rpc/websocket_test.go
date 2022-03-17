@@ -36,7 +36,7 @@ import (
 func TestWebsocketClientHeaders(t *testing.T) {
 	t.Parallel()
 
-	endpoint, header, err := wsClientHeaders("wss://testuser:test-PASS_01@example.com:1234", "https://example.com")
+	endpoint, header, err := wsClientHeaders("wss://testuser:test-PASS_01@example.com:1234", "https://example.com", nil)
 	if err != nil {
 		t.Fatalf("wsGetConfig failed: %s", err)
 	}
@@ -63,7 +63,7 @@ func TestWebsocketOriginCheck(t *testing.T) {
 	defer srv.Stop()
 	defer httpsrv.Close()
 
-	client, err := DialWebsocket(context.Background(), wsURL, "http://ekzample.com")
+	client, err := DialWebsocket(context.Background(), wsURL, "http://ekzample.com", nil)
 	if err == nil {
 		client.Close()
 		t.Fatal("no error for wrong origin")
@@ -74,7 +74,7 @@ func TestWebsocketOriginCheck(t *testing.T) {
 	}
 
 	// Connections without origin header should work.
-	client, err = DialWebsocket(context.Background(), wsURL, "")
+	client, err = DialWebsocket(context.Background(), wsURL, "", nil)
 	if err != nil {
 		t.Fatalf("error for empty origin: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestWebsocketLargeCall(t *testing.T) {
 	defer srv.Stop()
 	defer httpsrv.Close()
 
-	client, err := DialWebsocket(context.Background(), wsURL, "")
+	client, err := DialWebsocket(context.Background(), wsURL, "", nil)
 	if err != nil {
 		t.Fatalf("can't dial: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestWebsocketPeerInfo(t *testing.T) {
 	defer ts.Close()
 
 	ctx := context.Background()
-	c, err := DialWebsocket(ctx, tsurl, "origin.example.com")
+	c, err := DialWebsocket(ctx, tsurl, "origin.example.com", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ func TestClientWebsocketLargeMessage(t *testing.T) {
 	respLength := wsMessageSizeLimit - 50
 	srv.RegisterName("test", largeRespService{respLength})
 
-	c, err := DialWebsocket(context.Background(), wsURL, "")
+	c, err := DialWebsocket(context.Background(), wsURL, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestClientWebsocketSevered(t *testing.T) {
 	defer frontendProxy.Close()
 
 	wsURL := "ws:" + strings.TrimPrefix(frontendProxy.URL, "http:")
-	client, err := DialWebsocket(ctx, wsURL, "")
+	client, err := DialWebsocket(ctx, wsURL, "", nil)
 	if err != nil {
 		t.Fatalf("client dial error: %v", err)
 	}

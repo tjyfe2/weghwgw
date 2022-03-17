@@ -705,9 +705,9 @@ func TestClientHTTPJwt(t *testing.T) {
 		)
 		switch transport {
 		case "http":
-			client, err = Dial(httpsrv.URL, secret)
+			client, err = DialJWT(ctx, httpsrv.URL, secret)
 		case "ws":
-			client, err = DialWebsocket(ctx, "ws"+wssrv.URL[4:], "*", secret)
+			client, err = DialJWT(ctx, "ws"+wssrv.URL[4:], secret)
 		}
 		if err != nil {
 			t.Fatal(err)

@@ -159,15 +159,37 @@ func (op *requestOp) wait(ctx context.Context, c *Client) (*jsonrpcMessage, erro
 // For websocket connections, the origin is set to the local host name.
 //
 // The client reconnects automatically if the connection is lost.
-func Dial(rawurl string, secret []byte) (*Client, error) {
-	return DialContext(context.Background(), rawurl, secret)
+func Dial(rawurl string) (*Client, error) {
+	return DialContext(context.Background(), rawurl)
 }
 
 // DialContext creates a new RPC client, just like Dial.
 //
 // The context is used to cancel or time out the initial connection establishment. It does
 // not affect subsequent interactions with the client.
-func DialContext(ctx context.Context, rawurl string, secret []byte) (*Client, error) {
+func DialContext(ctx context.Context, rawurl string) (*Client, error) {
+	u, err := url.Parse(rawurl)
+	if err != nil {
+		return nil, err
+	}
+	switch u.Scheme {
+	case "http", "https":
+		return DialHTTP(rawurl, nil)
+	case "ws", "wss":
+		return DialWebsocket(ctx, rawurl, "", nil)
+	case "stdio":
+		return DialStdIO(ctx)
+	case "":
+		return DialIPC(ctx, rawurl)
+	default:
+		return nil, fmt.Errorf("no known transport for URL scheme %q", u.Scheme)
+	}
+}
+
+// DialContext creates a new RPC client with authenticated communication using a secret.
+//
+// Each request is signed with the secret key and timestamped using the issued-at JWT claim.
+func DialJWT(ctx context.Context, rawurl string, secret []byte) (*Client, error) {
 	u, err := url.Parse(rawurl)
 	if err != nil {
 		return nil, err
@@ -177,12 +199,8 @@ func DialContext(ctx context.Context, rawurl string, secret []byte) (*Client, er
 		return DialHTTP(rawurl, secret)
 	case "ws", "wss":
 		return DialWebsocket(ctx, rawurl, "", secret)
-	case "stdio":
-		return DialStdIO(ctx)
-	case "":
-		return DialIPC(ctx, rawurl)
 	default:
-		return nil, fmt.Errorf("no known transport for URL scheme %q", u.Scheme)
+		return nil, fmt.Errorf("no known transport for URL scheme %q that supports JWT", u.Scheme)
 	}
 }
 
