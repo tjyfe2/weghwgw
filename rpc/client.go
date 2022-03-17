@@ -159,24 +159,24 @@ func (op *requestOp) wait(ctx context.Context, c *Client) (*jsonrpcMessage, erro
 // For websocket connections, the origin is set to the local host name.
 //
 // The client reconnects automatically if the connection is lost.
-func Dial(rawurl string) (*Client, error) {
-	return DialContext(context.Background(), rawurl)
+func Dial(rawurl string, secret []byte) (*Client, error) {
+	return DialContext(context.Background(), rawurl, secret)
 }
 
 // DialContext creates a new RPC client, just like Dial.
 //
 // The context is used to cancel or time out the initial connection establishment. It does
 // not affect subsequent interactions with the client.
-func DialContext(ctx context.Context, rawurl string) (*Client, error) {
+func DialContext(ctx context.Context, rawurl string, secret []byte) (*Client, error) {
 	u, err := url.Parse(rawurl)
 	if err != nil {
 		return nil, err
 	}
 	switch u.Scheme {
 	case "http", "https":
-		return DialHTTP(rawurl)
+		return DialHTTP(rawurl, secret)
 	case "ws", "wss":
-		return DialWebsocket(ctx, rawurl, "")
+		return DialWebsocket(ctx, rawurl, "", secret)
 	case "stdio":
 		return DialStdIO(ctx)
 	case "":

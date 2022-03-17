@@ -46,6 +46,7 @@ type httpConn struct {
 	closeCh   chan interface{}
 	mu        sync.Mutex // protects headers
 	headers   http.Header
+	jwtSecret []byte
 }
 
 // httpConn implements ServerCodec, but it is treated specially by Client
@@ -111,7 +112,7 @@ var DefaultHTTPTimeouts = HTTPTimeouts{
 
 // DialHTTPWithClient creates a new RPC client that connects to an RPC server over HTTP
 // using the provided HTTP Client.
-func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
+func DialHTTPWithClient(endpoint string, secret []byte, client *http.Client) (*Client, error) {
 	// Sanity check URL so we don't end up with a client that will fail every request.
 	_, err := url.Parse(endpoint)
 	if err != nil {
@@ -124,18 +125,19 @@ func DialHTTPWithClient(endpoint string, client *http.Client) (*Client, error) {
 	headers.Set("content-type", contentType)
 	return newClient(initctx, func(context.Context) (ServerCodec, error) {
 		hc := &httpConn{
-			client:  client,
-			headers: headers,
-			url:     endpoint,
-			closeCh: make(chan interface{}),
+			client:    client,
+			headers:   headers,
+			url:       endpoint,
+			closeCh:   make(chan interface{}),
+			jwtSecret: secret,
 		}
 		return hc, nil
 	})
 }
 
 // DialHTTP creates a new RPC client that connects to an RPC server over HTTP.
-func DialHTTP(endpoint string) (*Client, error) {
-	return DialHTTPWithClient(endpoint, new(http.Client))
+func DialHTTP(endpoint string, secret []byte) (*Client, error) {
+	return DialHTTPWithClient(endpoint, secret, new(http.Client))
 }
 
 func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg interface{}) error {
@@ -187,6 +189,15 @@ func (hc *httpConn) doRequest(ctx context.Context, msg interface{}) (io.ReadClos
 	hc.mu.Lock()
 	req.Header = hc.headers.Clone()
 	hc.mu.Unlock()
+
+	// sign msg
+	if len(hc.jwtSecret) != 0 {
+		token, err := IssueJwtToken().SignedString(hc.jwtSecret)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", EncodeJwtAuthorization(token))
+	}
 
 	// do request
 	resp, err := hc.client.Do(req)
