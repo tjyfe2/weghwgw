@@ -1020,6 +1020,19 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
+	db, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if db == nil || err != nil {
+		return 0, err
+	}
+	// Check if tx is simple transfer, return gas immediately w/o binary searching if so.
+	if args.To != nil && db.GetCodeSize(*args.To) == 0 {
+		if args.AccessList == nil {
+			args.AccessList = &types.AccessList{}
+		}
+		config := b.ChainConfig()
+		val, err := core.IntrinsicGas(args.data(), *args.AccessList, false, config.IsHomestead(header.Number), config.IsIstanbul(header.Number))
+		return hexutil.Uint64(val), err
+	}
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
 		lo  uint64 = params.TxGas - 1
