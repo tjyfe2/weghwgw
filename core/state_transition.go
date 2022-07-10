@@ -234,8 +234,12 @@ func (st *StateTransition) preCheck() error {
 	}
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
 	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
-		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
-		if !st.evm.Config.NoBaseFee || st.gasFeeCap.BitLen() > 0 || st.gasTipCap.BitLen() > 0 {
+		// When NoBaseFee is active, require gasFeeCap be 0.
+		if st.evm.Config.NoBaseFee && st.gasFeeCap.BitLen() != 0 {
+			return fmt.Errorf("maxFeePerGas must be 0 when using NoBaseFee")
+		}
+		// If NoBaseFee is not active, perform the standard fee parameter checks.
+		if !st.evm.Config.NoBaseFee {
 			if l := st.gasFeeCap.BitLen(); l > 256 {
 				return fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
 					st.msg.From().Hex(), l)
@@ -340,11 +344,16 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		// After EIP-3529: refunds are capped to gasUsed / 5
 		st.refundGas(params.RefundQuotientEIP3529)
 	}
+
 	effectiveTip := st.gasPrice
-	if rules.IsLondon {
+	if rules.IsLondon && !st.evm.Config.NoBaseFee {
 		effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
 	}
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+
+	// Skip fee payment when NoBaseFee is set.
+	if !st.evm.Config.NoBaseFee {
+		st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
+	}
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),
