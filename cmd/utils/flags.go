@@ -992,6 +992,12 @@ var (
 		Usage:    "Pass custom headers to the RPC server wheng using --" + RemoteDBFlag.Name + " or the geth attach console.",
 		Category: flags.NetworkingCategory,
 	}
+
+	ExportTargetSizeFlag = &cli.IntFlag{
+		Name:     "export.targetsize",
+		Usage:    "Export target file size (uncompressed)",
+		Category: flags.MiscCategory,
+	}
 )
 
 var (
