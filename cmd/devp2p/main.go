@@ -52,6 +52,7 @@ func init() {
 		dnsCommand,
 		nodesetCommand,
 		rlpxCommand,
+		ethCommand,
 	}
 }
 
@@ -81,7 +82,7 @@ func getNodeArg(ctx *cli.Context) *enode.Node {
 	}
 	n, err := parseNode(ctx.Args().First())
 	if err != nil {
-		exit(err)
+		exit(fmt.Errorf("unable to parse enode: %s", err))
 	}
 	return n
 }
