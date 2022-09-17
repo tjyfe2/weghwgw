@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -46,7 +47,7 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if string(resp) != "ok" {
+	if string(resp) != "OK" {
 		return fmt.Errorf("talk request rejected: %s", string(resp))
 	}
 
@@ -54,11 +55,13 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	go handleUnhandledLoop(conn)
 
 	if sess, err := kcp.NewConn(fmt.Sprintf("%v:%d", n.IP(), n.UDP()), nil, 10, 3, conn); err == nil {
+		// sess.SetWriteDelay(false)
+		sess.SetWriteBuffer(28)
 		log.Info("Transmitting data")
 		for i := 0; i < 10; i++ {
-			n, err := sess.Write([]byte("this is a very large file"))
-			time.Sleep(time.Second)
+			n, err := sess.Write([]byte(fmt.Sprintf("%d: this is a very large file", i)))
 			log.Info("Sent data", "n", n, "err", err)
+			// time.Sleep(time.Second)
 		}
 		_, err := sess.Write([]byte("FIN"))
 		if err != nil {
@@ -68,6 +71,7 @@ func discv5WormholeSend(ctx *cli.Context) error {
 	} else {
 		log.Error("Could not establish kcp session", "err", err)
 	}
+	time.Sleep(time.Second * 10)
 	return nil
 }
 
@@ -120,7 +124,7 @@ func discv5WormholeReceive(ctx *cli.Context) error {
 
 func handleWormholeTalkrequest(id enode.ID, addr *net.UDPAddr, data []byte) []byte {
 	log.Info("Handling talk request", "from", addr, "id", id, "data", fmt.Sprintf("%x", data))
-	return []byte("ok")
+	return []byte("OK")
 }
 
 func handleUnhandledLoop(wrapper *unhandledWrapper) {
@@ -141,7 +145,6 @@ func handleUnhandledLoop(wrapper *unhandledWrapper) {
 			wrapper.inqueue = append(wrapper.inqueue, packet.Data...)
 			wrapper.flag.Broadcast()
 			wrapper.readMu.Unlock()
-
 		}
 	}
 }
@@ -172,12 +175,16 @@ func (o *unhandledWrapper) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 
 	o.readMu.Lock()
 	for len(o.inqueue) == 0 {
+		log.Trace("waiting for message")
 		o.flag.Wait()
 	}
 	defer o.readMu.Unlock()
+
+	log.Trace(fmt.Sprintf("<< %s", common.Bytes2Hex(o.inqueue)))
+
 	n = copy(p, o.inqueue)
 	o.inqueue = make([]byte, 0)
-	log.Trace("Reading from unhandled", "n", n)
+
 	return n, o.remote, nil
 }
 
@@ -186,6 +193,7 @@ func (o *unhandledWrapper) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	if err != nil {
 		return 0, err
 	}
+	log.Trace(fmt.Sprintf(">> %s", common.Bytes2Hex(p)))
 	return o.disc.WriteTo(udpAddr, p)
 }
 

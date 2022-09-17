@@ -60,7 +60,7 @@ const (
 	// Discovery packets are defined to be no larger than 1280 bytes.
 	// Packets larger than this size will be cut at the end and treated
 	// as invalid because their hash won't match.
-	maxPacketSize = 1280
+	maxPacketSize = 1000000 // 1280
 )
 
 // UDPv4 implements the v4 wire protocol.
