@@ -50,7 +50,5 @@ devtools:
 	@type "protoc" 2> /dev/null || echo 'Please install protoc'
 
 ssz:
-	rm -f cmd/utils/sszarchive_encoding.go
-	rm -f core/types/sszcodec/block_encoding.go
-	go run github.com/ferranbt/fastssz/sszgen@v0.1.2 --include core/types/sszcodec --path cmd/utils -objs ArchiveBody,ArchiveHeader
-	go run github.com/ferranbt/fastssz/sszgen@v0.1.2 --path core/types/sszcodec -objs Header,Block,Receipt,Log
+	rm -f internal/history/types_encoding.go
+	go run github.com/ferranbt/fastssz/sszgen@v0.1.2 --path internal/history -objs ArchiveBody,ArchiveHeader,Header,Block,Receipt,Log

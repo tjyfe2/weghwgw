@@ -1,10 +1,23 @@
-package sszcodec
+package history
 
 import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/types"
 )
+
+const (
+	MaxBlocks = 1000000
+)
+
+type ArchiveHeader struct {
+	Version         uint64
+	HeadBlockNumber uint64
+	BlockCount      uint32
+}
+type ArchiveBody struct {
+	Blocks []*Block `ssz-max:"1000000"`
+}
 
 type Block struct {
 	Header       *Header    `ssz-max:"604"`
@@ -16,34 +29,33 @@ type Block struct {
 type Header struct {
 	ParentHash    []byte `ssz-size:"32"`
 	UncleHash     []byte `ssz-size:"32"`
-	FeeRecipient  []byte `ssz-size:"20"` // 84
+	FeeRecipient  []byte `ssz-size:"20"`
 	StateRoot     []byte `ssz-size:"32"`
 	TxHash        []byte `ssz-size:"32"`
-	ReceiptsRoot  []byte `ssz-size:"32"`  // 180
-	LogsBloom     []byte `ssz-size:"256"` // 436
+	ReceiptsRoot  []byte `ssz-size:"32"`
+	LogsBloom     []byte `ssz-size:"256"`
 	Difficulty    []byte `ssz-size:"32"`
 	BlockNumber   uint64
 	GasLimit      uint64
 	GasUsed       uint64
-	Timestamp     uint64 // 500
+	Timestamp     uint64
 	ExtraData     []byte `ssz-max:"32"`
 	BaseFeePerGas []byte `ssz-size:"32"`
 	MixDigest     []byte `ssz-size:"32"`
-	Nonce         []byte `ssz-size:"8"` // 604
-	//	BlockHash     []byte   `ssz-size:"32"`
+	Nonce         []byte `ssz-size:"8"`
 }
 
 type Receipt struct {
 	PostState         []byte `ssz-max:"32"`
 	Status            uint64
 	CumulativeGasUsed uint64
-	Logs              []*Log `ssz-max:"4194452"` // xxx
+	Logs              []*Log `ssz-max:"4194452"`
 }
 
 type Log struct {
 	Address []byte   `ssz-size:"20"`
-	Topics  [][]byte `ssz-max:"4" ssz-size:"?,32"` // 148
-	Data    []byte   `ssz-max:"4194304"`           // 4194452
+	Topics  [][]byte `ssz-max:"4" ssz-size:"?,32"`
+	Data    []byte   `ssz-max:"4194304"`
 }
 
 func FromBlock() *Block {
@@ -79,7 +91,6 @@ func FromHeader(h *types.Header) (*Header, error) {
 	}
 	sh.MixDigest = h.MixDigest[:]
 	sh.Nonce = h.Nonce[:]
-	//	e.BlockHash = make([]byte, 32)
 	return sh, nil
 }
 

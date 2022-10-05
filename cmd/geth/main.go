@@ -212,7 +212,6 @@ func init() {
 		initCommand,
 		importCommand,
 		exportCommand,
-		exportHistoryCommand,
 		importPreimagesCommand,
 		exportPreimagesCommand,
 		removedbCommand,
@@ -241,6 +240,8 @@ func init() {
 		snapshotCommand,
 		// See verkle.go
 		verkleCommand,
+		// See history.go
+		historyCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
