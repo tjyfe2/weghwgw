@@ -121,6 +121,7 @@ be gzipped.`,
 		Action:    exportHistory,
 		Name:      "export-history",
 		Usage:     "Export blockchain history (blocks+receipts) into SSZ file",
+		Category:  "MISCELLANEOUS COMMANDS",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
 		Flags: append([]cli.Flag{
 			utils.ExportTargetSizeFlag,
