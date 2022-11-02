@@ -16,22 +16,22 @@ var _ = (*headerMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (h Header) MarshalJSON() ([]byte, error) {
 	type Header struct {
-		ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
-		UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-		Coinbase    common.Address `json:"miner"`
-		Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
-		TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
-		ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"`
-		Bloom       Bloom          `json:"logsBloom"        gencodec:"required"`
-		Difficulty  *hexutil.Big   `json:"difficulty"       gencodec:"required"`
-		Number      *hexutil.Big   `json:"number"           gencodec:"required"`
+		ParentHash  common.Hash    `json:"parentHash"       gencodec:"required" ssz-size:"32"`
+		UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required" ssz-size:"32"`
+		Coinbase    common.Address `json:"miner" ssz-size:"20"`
+		Root        common.Hash    `json:"stateRoot"        gencodec:"required" ssz-size:"32"`
+		TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required" ssz-size:"32"`
+		ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required" ssz-size:"32"`
+		Bloom       Bloom          `json:"logsBloom"        gencodec:"required" ssz-size:"256"`
+		Difficulty  *hexutil.Big   `json:"difficulty"       gencodec:"required" ssz-size:"32"`
+		Number      *hexutil.Big   `json:"number"           gencodec:"required" ssz-size:"32"`
 		GasLimit    hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
 		GasUsed     hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
 		Time        hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
-		Extra       hexutil.Bytes  `json:"extraData"        gencodec:"required"`
-		MixDigest   common.Hash    `json:"mixHash"`
+		Extra       hexutil.Bytes  `json:"extraData"        gencodec:"required" ssz-max:"32"`
+		MixDigest   common.Hash    `json:"mixHash" ssz-size:"32"`
 		Nonce       BlockNonce     `json:"nonce"`
-		BaseFee     *hexutil.Big   `json:"baseFeePerGas" rlp:"optional"`
+		BaseFee     *hexutil.Big   `json:"baseFeePerGas" rlp:"optional" ssz-size:"32"`
 		Hash        common.Hash    `json:"hash"`
 	}
 	var enc Header
@@ -58,22 +58,22 @@ func (h Header) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (h *Header) UnmarshalJSON(input []byte) error {
 	type Header struct {
-		ParentHash  *common.Hash    `json:"parentHash"       gencodec:"required"`
-		UncleHash   *common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-		Coinbase    *common.Address `json:"miner"`
-		Root        *common.Hash    `json:"stateRoot"        gencodec:"required"`
-		TxHash      *common.Hash    `json:"transactionsRoot" gencodec:"required"`
-		ReceiptHash *common.Hash    `json:"receiptsRoot"     gencodec:"required"`
-		Bloom       *Bloom          `json:"logsBloom"        gencodec:"required"`
-		Difficulty  *hexutil.Big    `json:"difficulty"       gencodec:"required"`
-		Number      *hexutil.Big    `json:"number"           gencodec:"required"`
+		ParentHash  *common.Hash    `json:"parentHash"       gencodec:"required" ssz-size:"32"`
+		UncleHash   *common.Hash    `json:"sha3Uncles"       gencodec:"required" ssz-size:"32"`
+		Coinbase    *common.Address `json:"miner" ssz-size:"20"`
+		Root        *common.Hash    `json:"stateRoot"        gencodec:"required" ssz-size:"32"`
+		TxHash      *common.Hash    `json:"transactionsRoot" gencodec:"required" ssz-size:"32"`
+		ReceiptHash *common.Hash    `json:"receiptsRoot"     gencodec:"required" ssz-size:"32"`
+		Bloom       *Bloom          `json:"logsBloom"        gencodec:"required" ssz-size:"256"`
+		Difficulty  *hexutil.Big    `json:"difficulty"       gencodec:"required" ssz-size:"32"`
+		Number      *hexutil.Big    `json:"number"           gencodec:"required" ssz-size:"32"`
 		GasLimit    *hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
 		GasUsed     *hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
 		Time        *hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
-		Extra       *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
-		MixDigest   *common.Hash    `json:"mixHash"`
+		Extra       *hexutil.Bytes  `json:"extraData"        gencodec:"required" ssz-max:"32"`
+		MixDigest   *common.Hash    `json:"mixHash" ssz-size:"32"`
 		Nonce       *BlockNonce     `json:"nonce"`
-		BaseFee     *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
+		BaseFee     *hexutil.Big    `json:"baseFeePerGas" rlp:"optional" ssz-size:"32"`
 	}
 	var dec Header
 	if err := json.Unmarshal(input, &dec); err != nil {

@@ -65,27 +65,28 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 
 //go:generate go run github.com/fjl/gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
 //go:generate go run ../../rlp/rlpgen -type Header -out gen_header_rlp.go
+//go:generate go run github.com/ferranbt/fastssz/sszgen@latest -path block.go -objs Header -include ../../common -exclude-objs Hash -output gen_header_ssz.go
 
 // Header represents a block header in the Ethereum blockchain.
 type Header struct {
-	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
-	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-	Coinbase    common.Address `json:"miner"`
-	Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
-	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
-	ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"`
-	Bloom       Bloom          `json:"logsBloom"        gencodec:"required"`
-	Difficulty  *big.Int       `json:"difficulty"       gencodec:"required"`
-	Number      *big.Int       `json:"number"           gencodec:"required"`
+	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required" ssz-size:"32"`
+	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required" ssz-size:"32"`
+	Coinbase    common.Address `json:"miner" ssz-size:"20"`
+	Root        common.Hash    `json:"stateRoot"        gencodec:"required" ssz-size:"32"`
+	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required" ssz-size:"32"`
+	ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required" ssz-size:"32"`
+	Bloom       Bloom          `json:"logsBloom"        gencodec:"required" ssz-size:"256"`
+	Difficulty  *big.Int       `json:"difficulty"       gencodec:"required" ssz-size:"32"`
+	Number      *big.Int       `json:"number"           gencodec:"required" ssz-size:"32"`
 	GasLimit    uint64         `json:"gasLimit"         gencodec:"required"`
 	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
 	Time        uint64         `json:"timestamp"        gencodec:"required"`
-	Extra       []byte         `json:"extraData"        gencodec:"required"`
-	MixDigest   common.Hash    `json:"mixHash"`
+	Extra       []byte         `json:"extraData"        gencodec:"required" ssz-max:"32"`
+	MixDigest   common.Hash    `json:"mixHash" ssz-size:"32"`
 	Nonce       BlockNonce     `json:"nonce"`
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
-	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
+	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional" ssz-size:"32"`
 
 	/*
 		TODO (MariusVanDerWijden) Add this field once needed
