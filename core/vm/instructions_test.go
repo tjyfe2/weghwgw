@@ -18,6 +18,7 @@ package vm
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -691,4 +692,56 @@ func TestRandom(t *testing.T) {
 			t.Errorf("Testcase %v: expected  %x, got %x", tt.name, expected, actual)
 		}
 	}
+}
+
+func TestStaticRelativeJumps(t *testing.T) {
+	type testcase struct {
+		op        string
+		name      string
+		code      string
+		pc        uint64
+		condition bool
+	}
+
+	for _, tt := range []testcase{
+		{op: "RJUMP", name: "positive offset", code: "5c000100600100", pc: 4},
+		{op: "RJUMP", name: "negative offset", code: "5cfffd00600100", pc: 0},
+		{op: "RJUMPI", name: "positive offset", code: "5d000100600100", pc: 4, condition: true},
+		{op: "RJUMPI", name: "negative offset", code: "5dfffd00600100", pc: 0, condition: true},
+		{op: "RJUMPI", name: "failed condition", code: "5dfffd00600100", pc: 3, condition: false},
+	} {
+		var (
+			addr           = common.Address{0x42}
+			env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
+			stack          = newstack()
+			pc             = uint64(0)
+			evmInterpreter = env.interpreter
+			code           = makeEOF1(common.Hex2Bytes(tt.code))
+			contract       = NewContract(AccountRef(addr), AccountRef(addr), common.Big0, 0)
+			header, _      = readEOF1Header(code)
+		)
+		contract.SetCallCode(&addr, common.Hash{}, code, &header)
+
+		if tt.op == "RJUMP" {
+			opRjump(&pc, evmInterpreter, &ScopeContext{nil, stack, contract})
+		} else if tt.op == "RJUMPI" {
+			if tt.condition {
+				stack.push(uint256.NewInt(1))
+			} else {
+				stack.push(uint256.NewInt(0))
+			}
+			opRjumpi(&pc, evmInterpreter, &ScopeContext{nil, stack, contract})
+		}
+
+		// The pc should be one less than expected because the interpreter will increment it.
+		if pc != tt.pc-1 {
+			t.Errorf("%s %s: expected pc to be set to %d, got %d: ", tt.op, tt.name, tt.pc, pc+1)
+		}
+	}
+}
+
+func makeEOF1(code []byte) []byte {
+	header := []byte{0xef, 0x00, 0x01, 0x01, 0xff, 0xff, 0x00}
+	binary.BigEndian.PutUint16(header[4:6], uint16(len(code)))
+	return append(header, code...)
 }

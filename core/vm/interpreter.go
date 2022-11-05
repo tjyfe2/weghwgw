@@ -60,6 +60,8 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
 	if cfg.JumpTable == nil {
 		switch {
+		case evm.chainRules.IsShanghai:
+			cfg.JumpTable = &shanghaiInstructionSet
 		case evm.chainRules.IsMerge:
 			cfg.JumpTable = &mergeInstructionSet
 		case evm.chainRules.IsLondon:
@@ -227,6 +229,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		} else if in.cfg.Debug {
 			in.cfg.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
 			logged = true
+		}
+		// fail if op is not available in legacy context
+		if operation.eof1 && callContext.Contract.IsLegacy() {
+			_, err = opUndefined(&pc, in, callContext)
+			break
 		}
 		// execute the operation
 		res, err = operation.execute(&pc, in, callContext)

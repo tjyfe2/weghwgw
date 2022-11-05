@@ -44,6 +44,9 @@ type operation struct {
 	memorySize memorySizeFunc
 
 	undefined bool
+
+	// eof1 specifies if an instrustion should only be available in eof1
+	eof1 bool
 }
 
 var (
@@ -57,6 +60,7 @@ var (
 	berlinInstructionSet           = newBerlinInstructionSet()
 	londonInstructionSet           = newLondonInstructionSet()
 	mergeInstructionSet            = newMergeInstructionSet()
+	shanghaiInstructionSet         = newShanghaiInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -78,6 +82,12 @@ func validate(jt JumpTable) JumpTable {
 		}
 	}
 	return jt
+}
+
+func newShanghaiInstructionSet() JumpTable {
+	instructionSet := newMergeInstructionSet()
+	enable4200(&instructionSet)
+	return validate(instructionSet)
 }
 
 func newMergeInstructionSet() JumpTable {
