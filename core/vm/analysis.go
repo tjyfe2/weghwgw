@@ -79,6 +79,13 @@ func codeBitmapInternal(code, bits bitvec) bitvec {
 		if int8(op) < int8(PUSH1) { // If not PUSH (the int8(op) > int(PUSH32) is always false).
 			continue
 		}
+		// Short circruit for now on EOF ops with immediates.
+		// TODO(matt): make EOF-specific code bitmap
+		if op == RJUMP || op == RJUMPI || op == CALLF {
+			bits.setN(set4BitsMask, pc)
+			pc += 4
+			continue
+		}
 		numbits := op - PUSH1 + 1
 		if numbits >= 8 {
 			for ; numbits >= 16; numbits -= 16 {

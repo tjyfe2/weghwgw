@@ -38,9 +38,20 @@ type Config struct {
 // ScopeContext contains the things that are per-call, such as stack and memory,
 // but not transients like pc and gas
 type ScopeContext struct {
-	Memory   *Memory
-	Stack    *Stack
-	Contract *Contract
+	Memory        *Memory
+	Stack         *Stack
+	Contract      *Contract
+	ActiveSection uint64
+	RetStack      []*SubroutineContext
+}
+
+// SubroutineContext contains control-flow information for function subroutines.
+type SubroutineContext struct {
+	Section     uint64
+	Pc          uint64
+	StackHeight uint64
+	CodeOffset  uint64
+	CodeLength  uint64
 }
 
 // EVMInterpreter represents an EVM interpreter
@@ -138,7 +149,17 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			Memory:   mem,
 			Stack:    stack,
 			Contract: contract,
+			RetStack: []*SubroutineContext{
+				{
+					Section:     0,
+					Pc:          0,
+					StackHeight: 0,
+					CodeOffset:  0,
+					CodeLength:  uint64(len(contract.Code)),
+				},
+			},
 		}
+
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
@@ -150,6 +171,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		logged  bool   // deferred EVMLogger should ignore already logged steps
 		res     []byte // result of the opcode execution function
 	)
+
+	// The default case is set above, if the contract is actually EOF the
+	// offset should be updated to beginning of the first code section.
+	if !contract.IsLegacy() {
+		callContext.RetStack[0].CodeOffset = contract.Container.code[0]
+	}
 	// Don't move this deferred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
 	// they are returned to the pools
@@ -180,7 +207,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
-		op = contract.GetOp(contract.CodeBeginOffset() + pc)
+		var op OpCode
+		if contract.IsLegacy() {
+			op = contract.GetOp(pc)
+		} else {
+			op = contract.GetOpInSection(pc, callContext.ActiveSection)
+		}
 		operation := in.cfg.JumpTable[op]
 		cost = operation.constantGas // For tracing
 		// Validate stack

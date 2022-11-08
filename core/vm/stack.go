@@ -32,7 +32,8 @@ var stackPool = sync.Pool{
 // expected to be changed and modified. stack does not take care of adding newly
 // initialised objects.
 type Stack struct {
-	data []uint256.Int
+	data  []uint256.Int
+	floor int
 }
 
 func newstack() *Stack {
@@ -61,7 +62,7 @@ func (st *Stack) pop() (ret uint256.Int) {
 }
 
 func (st *Stack) len() int {
-	return len(st.data)
+	return len(st.data) - st.floor
 }
 
 func (st *Stack) swap(n int) {
