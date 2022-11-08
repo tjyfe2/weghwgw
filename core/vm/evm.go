@@ -219,17 +219,18 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		if len(code) == 0 {
 			ret, err = nil, nil // gas is unchanged
 		} else {
-			addrCopy := addr
-
-			var header EOF1Header
+			var (
+				addrCopy  = addr
+				container *EOF1Container
+			)
 			if evm.chainRules.IsShanghai && hasEOFMagic(code) {
-				header = readValidEOF1Header(code)
+				c, _ := NewEOF1Container(code, evm.interpreter.cfg.JumpTable, true)
+				container = &c
 			}
-
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
-			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, &header)
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, container)
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
 		}
@@ -286,15 +287,16 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 		code := evm.StateDB.GetCode(addrCopy)
 
-		var header EOF1Header
+		var container *EOF1Container
 		if evm.chainRules.IsShanghai && hasEOFMagic(code) {
-			header = readValidEOF1Header(code)
+			c, _ := NewEOF1Container(code, evm.interpreter.cfg.JumpTable, true)
+			container = &c
 		}
 
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, &header)
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, container)
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -335,14 +337,15 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 		code := evm.StateDB.GetCode(addrCopy)
 
-		var header EOF1Header
+		var container *EOF1Container
 		if evm.chainRules.IsShanghai && hasEOFMagic(code) {
-			header = readValidEOF1Header(code)
+			c, _ := NewEOF1Container(code, evm.interpreter.cfg.JumpTable, true)
+			container = &c
 		}
 
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, &header)
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, container)
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -395,15 +398,19 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 
 		code := evm.StateDB.GetCode(addrCopy)
 
-		var header EOF1Header
+		var container *EOF1Container
 		if evm.chainRules.IsShanghai && hasEOFMagic(code) {
-			header = readValidEOF1Header(code)
+			c, err := NewEOF1Container(code, evm.interpreter.cfg.JumpTable, false)
+			if err != nil {
+				return nil, gas, err
+			}
+			container = &c
 		}
 
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(addrCopy), new(big.Int), gas)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, &header)
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, container)
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
@@ -457,13 +464,13 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
 	// Try to read code header if it claims to be EOF-formatted.
-	var header EOF1Header
+	var container *EOF1Container
 	if evm.chainRules.IsShanghai && hasEOFMagic(codeAndHash.code) {
-		var err error
-		header, err = validateEOF(codeAndHash.code, evm.interpreter.cfg.JumpTable)
+		c, err := NewEOF1Container(codeAndHash.code, evm.interpreter.cfg.JumpTable, false)
 		if err != nil {
 			return nil, common.Address{}, gas, ErrInvalidEOFCode
 		}
+		container = &c
 	}
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
@@ -476,7 +483,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, AccountRef(address), value, gas)
-	contract.SetCodeOptionalHash(&address, codeAndHash, &header)
+	contract.SetCodeOptionalHash(&address, codeAndHash, container)
 
 	if evm.Config.Debug {
 		if evm.depth == 0 {

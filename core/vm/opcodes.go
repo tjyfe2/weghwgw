@@ -118,6 +118,8 @@ const (
 	JUMPDEST OpCode = 0x5b
 	RJUMP    OpCode = 0x5c
 	RJUMPI   OpCode = 0x5d
+	CALLF    OpCode = 0x5e
+	RETF     OpCode = 0x49
 	PUSH0    OpCode = 0x5f
 )
 
@@ -564,7 +566,7 @@ func StringToOp(str string) OpCode {
 // IsTerminating specifies if an opcode is a valid terminating instruction in EOF.
 func (op OpCode) isTerminating() bool {
 	switch op {
-	case STOP, RETURN, REVERT, INVALID, SELFDESTRUCT:
+	case STOP, RETURN, REVERT, INVALID, SELFDESTRUCT, RETF:
 		return true
 	}
 	return false
