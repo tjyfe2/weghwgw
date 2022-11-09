@@ -219,18 +219,11 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		if len(code) == 0 {
 			ret, err = nil, nil // gas is unchanged
 		} else {
-			var (
-				addrCopy  = addr
-				container *EOF1Container
-			)
-			if evm.chainRules.IsShanghai && hasEOFMagic(code) {
-				c, _ := NewEOF1Container(code, evm.interpreter.cfg.JumpTable, true)
-				container = &c
-			}
+			addrCopy := addr
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
-			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, container)
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.mustReadContainer(code))
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
 		}
@@ -283,20 +276,14 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
-		addrCopy := addr
-
-		code := evm.StateDB.GetCode(addrCopy)
-
-		var container *EOF1Container
-		if evm.chainRules.IsShanghai && hasEOFMagic(code) {
-			c, _ := NewEOF1Container(code, evm.interpreter.cfg.JumpTable, true)
-			container = &c
-		}
-
+		var (
+			addrCopy = addr
+			code     = evm.StateDB.GetCode(addrCopy)
+		)
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, container)
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.mustReadContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -334,18 +321,11 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
 		addrCopy := addr
-
 		code := evm.StateDB.GetCode(addrCopy)
-
-		var container *EOF1Container
-		if evm.chainRules.IsShanghai && hasEOFMagic(code) {
-			c, _ := NewEOF1Container(code, evm.interpreter.cfg.JumpTable, true)
-			container = &c
-		}
 
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, container)
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.mustReadContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -391,22 +371,17 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
-		// At this point, we use a copy of address. If we don't, the go compiler will
-		// leak the 'contract' to the outer scope, and make allocation for 'contract'
-		// even if the actual execution ends on RunPrecompiled above.
-		addrCopy := addr
-
-		code := evm.StateDB.GetCode(addrCopy)
-
-		var container *EOF1Container
-		if evm.chainRules.IsShanghai && hasEOFMagic(code) {
-			c, err := NewEOF1Container(code, evm.interpreter.cfg.JumpTable, false)
-			if err != nil {
-				return nil, gas, err
-			}
-			container = &c
+		var (
+			// At this point, we use a copy of address. If we don't, the go compiler will
+			// leak the 'contract' to the outer scope, and make allocation for 'contract'
+			// even if the actual execution ends on RunPrecompiled above.
+			addrCopy  = addr
+			code      = evm.StateDB.GetCode(addrCopy)
+			container *EOF1Container
+		)
+		if container, err = evm.readContainer(code); err != nil {
+			return nil, gas, err
 		}
-
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(addrCopy), new(big.Int), gas)
@@ -464,13 +439,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
 	// Try to read code header if it claims to be EOF-formatted.
-	var container *EOF1Container
-	if evm.chainRules.IsShanghai && hasEOFMagic(codeAndHash.code) {
-		c, err := NewEOF1Container(codeAndHash.code, evm.interpreter.cfg.JumpTable, false)
-		if err != nil {
-			return nil, common.Address{}, gas, ErrInvalidEOFCode
-		}
-		container = &c
+	container, err := evm.readContainer(codeAndHash.code)
+	if err != nil {
+		return nil, common.Address{}, gas, ErrInvalidEOFCode
 	}
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
@@ -502,15 +473,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	if err == nil && hasEOFByte(ret) {
 		if evm.chainRules.IsShanghai {
-			// Allow only valid EOF1 if EIP-3540 and EIP-3670 are enabled.
-			if hasEOFMagic(ret) {
-				_, err = NewEOF1Header(ret, evm.interpreter.cfg.JumpTable, false)
-				if err != nil {
-					err = ErrInvalidEOFCode
-				}
-			} else {
-				// Reject non-EOF code starting with 0xEF.
-				err = ErrInvalidCode
+			_, err = NewEOF1Header(ret, evm.interpreter.cfg.JumpTable, false)
+			if err != nil {
+				err = ErrInvalidEOFCode
 			}
 		} else if evm.chainRules.IsLondon {
 			// Reject code starting with 0xEF in London.
@@ -549,6 +514,30 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		}
 	}
 	return ret, address, contract.Gas, err
+}
+
+// mustReadContainer reads a valid EOF container.
+func (evm *EVM) mustReadContainer(code []byte) *EOF1Container {
+	var container *EOF1Container
+	if evm.chainRules.IsShanghai && hasEOFMagic(code) {
+		c, _ := NewEOF1Container(code, evm.interpreter.cfg.JumpTable, true)
+		container = &c
+	}
+	return container
+}
+
+// readContainer attempts to read the EOF container defined by code if the
+// chainRules supports it.
+func (evm *EVM) readContainer(code []byte) (*EOF1Container, error) {
+	var container *EOF1Container
+	if evm.chainRules.IsShanghai && hasEOFMagic(code) {
+		c, err := NewEOF1Container(code, evm.interpreter.cfg.JumpTable, false)
+		if err != nil {
+			return nil, err
+		}
+		container = &c
+	}
+	return container, nil
 }
 
 // Create creates a new contract using code as deployment code.
