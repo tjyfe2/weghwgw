@@ -507,7 +507,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		if evm.chainRules.IsShanghai {
 			// Allow only valid EOF1 if EIP-3540 and EIP-3670 are enabled.
 			if hasEOFMagic(ret) {
-				_, err = validateEOF(ret, evm.interpreter.cfg.JumpTable)
+				_, err = NewEOF1Header(ret, evm.interpreter.cfg.JumpTable, false)
 				if err != nil {
 					err = ErrInvalidEOFCode
 				}
