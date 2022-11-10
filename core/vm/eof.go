@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type eofVersion int
@@ -275,6 +277,71 @@ func validateInstructions(code []byte, header *EOF1Header, jumpTable *JumpTable)
 		return fmt.Errorf("%v: %v", ErrEOF1TerminatingInstructionMissing, opcode)
 	}
 	return nil
+}
+
+func validateStack(code []byte, startHeight int, outputs int, types []Annotation, jt *JumpTable) (int, error) {
+	type item struct {
+		pos    int
+		height int
+	}
+
+	heights := make(map[int]int)
+	worklist := []item{{0, startHeight}}
+
+	for 0 < len(worklist) {
+		var (
+			idx    = len(worklist) - 1
+			pos    = worklist[idx].pos
+			height = worklist[idx].height
+		)
+		worklist = worklist[:idx]
+		for {
+			op := OpCode(code[pos])
+
+			// Check if pos has already be visited; if so, the stack heights should be the same.
+			if exp, ok := heights[pos]; ok {
+				if height != exp {
+					return 0, fmt.Errorf("stack height mismatch for different paths")
+				}
+				// Already visited this path and stack height
+				// matches.
+				break
+			}
+			heights[pos] = height
+
+			switch {
+			case op == CALLF:
+				var arg uint16
+				binary.Read(bytes.NewReader(code[pos+1:]), binary.BigEndian, &arg)
+				if types[arg].input < uint8(height) {
+					return 0, fmt.Errorf("stack underflow")
+				}
+				if int(types[arg].output)+height >= int(params.StackLimit) {
+					return 0, fmt.Errorf("stack overflow")
+				}
+			case op == RJUMP:
+				var arg uint16
+				binary.Read(bytes.NewReader(code[pos+1:]), binary.BigEndian, &arg)
+				pos += int(arg)
+			case op == RJUMPI:
+				var arg uint16
+				binary.Read(bytes.NewReader(code[pos+1:]), binary.BigEndian, &arg)
+				worklist = append(worklist, item{pos: pos + int(arg), height: height})
+				pos += 3
+
+			case op.isTerminating():
+				if height != outputs {
+					return 0, fmt.Errorf("incorrect number of stack outputs (want: %d, got %d)", outputs, height)
+				}
+			default:
+				if jt[op].minStack < height {
+					return 0, fmt.Errorf("stack underflow")
+				}
+				height += int(params.StackLimit) - jt[op].maxStack
+			}
+		}
+	}
+	return 0, nil
 }
 
 // readSectionSize returns the size of the section at the offset i.
