@@ -157,8 +157,8 @@ func (c *Contract) GetOp(n uint64) OpCode {
 
 // GetOpInSection returns the n'th element in the code sections's byte array.
 func (c *Contract) GetOpInSection(n uint64, s uint64) OpCode {
-	if n < uint64(c.Container.header.codeSize[s]) {
-		start := c.Container.code[s]
+	if n < uint64(c.Container.codeSize[s]) {
+		start := c.Container.codeOffsets[s]
 		return OpCode(c.Code[start+n])
 	}
 

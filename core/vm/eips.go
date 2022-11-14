@@ -269,7 +269,7 @@ func enable4200(jt *JumpTable) {
 // opRjump implements the RJUMP opcode
 func opRjump(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		idx            = scope.Contract.Container.code[scope.ActiveSection] + *pc + 1
+		idx            = scope.Contract.Container.codeOffsets[scope.ActiveSection] + *pc + 1
 		arg            = scope.Contract.Code[idx : idx+2]
 		relativeOffset int16
 	)
@@ -295,7 +295,7 @@ func opRjumpi(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	}
 
 	var (
-		idx            = scope.Contract.Container.code[scope.ActiveSection] + *pc + 1
+		idx            = scope.Contract.Container.codeOffsets[scope.ActiveSection] + *pc + 1
 		arg            = scope.Contract.Code[idx : idx+2]
 		relativeOffset int16
 	)
@@ -332,7 +332,7 @@ func enable4750(jt *JumpTable) {
 // opCallf implements the CALLF opcode.
 func opCallf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		idx     = scope.Contract.Container.code[scope.ActiveSection] + *pc + 1
+		idx     = scope.Contract.Container.codeOffsets[scope.ActiveSection] + *pc + 1
 		arg     = scope.Contract.Code[idx : idx+2]
 		section int16
 	)
@@ -341,7 +341,7 @@ func opCallf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	}
 	caller := scope.RetStack[len(scope.RetStack)-1]
 	sig := scope.Contract.Container.types[int(section)]
-	if scope.Stack.len() < int(caller.StackHeight)+int(sig.input) {
+	if scope.Stack.len() < int(caller.StackHeight)+int(sig.Input) {
 		return nil, fmt.Errorf("too few stack items")
 	}
 	if len(scope.RetStack) >= 1024 {
@@ -365,7 +365,7 @@ func opCallf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 // opRetf implements the RETF opcode.
 func opRetf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	sig := scope.Contract.Container.types[scope.ActiveSection]
-	if scope.Stack.len() < int(sig.output) {
+	if scope.Stack.len() < int(sig.Output) {
 		return nil, fmt.Errorf("too few stack items")
 	}
 

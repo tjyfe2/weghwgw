@@ -223,7 +223,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
-			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.mustReadContainer(code))
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.mustParseContainer(code))
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
 		}
@@ -283,7 +283,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.mustReadContainer(code))
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.mustParseContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -325,7 +325,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.mustReadContainer(code))
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.mustParseContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -379,7 +379,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 			code      = evm.StateDB.GetCode(addrCopy)
 			container *EOF1Container
 		)
-		if container, err = evm.readContainer(code); err != nil {
+		if container, err = evm.parseContainer(code); err != nil {
 			return nil, gas, err
 		}
 		// Initialise a new contract and set the code that is to be used by the EVM.
@@ -439,7 +439,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
 	// Try to read code header if it claims to be EOF-formatted.
-	container, err := evm.readContainer(codeAndHash.code)
+	container, err := evm.parseContainer(codeAndHash.code)
 	if err != nil {
 		return nil, common.Address{}, gas, ErrInvalidEOFCode
 	}
@@ -473,7 +473,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	if err == nil && hasEOFByte(ret) {
 		if evm.chainRules.IsShanghai {
-			_, err = NewEOF1Header(ret, evm.interpreter.cfg.JumpTable, false)
+			_, err := ParseAndValidateEOF1Container(ret, evm.interpreter.cfg.JumpTable)
 			if err != nil {
 				err = ErrInvalidEOFCode
 			}
@@ -516,26 +516,25 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	return ret, address, contract.Gas, err
 }
 
-// mustReadContainer reads a valid EOF container.
-func (evm *EVM) mustReadContainer(code []byte) *EOF1Container {
+// mustParseContainer reads a valid EOF container.
+func (evm *EVM) mustParseContainer(code []byte) *EOF1Container {
 	var container *EOF1Container
 	if evm.chainRules.IsShanghai && hasEOFMagic(code) {
-		c, _ := NewEOF1Container(code, evm.interpreter.cfg.JumpTable, true)
-		container = &c
+		container, _ = ParseEOF1Container(code)
 	}
 	return container
 }
 
-// readContainer attempts to read the EOF container defined by code if the
+// parseContainer attempts to read the EOF container defined by code if the
 // chainRules supports it.
-func (evm *EVM) readContainer(code []byte) (*EOF1Container, error) {
+func (evm *EVM) parseContainer(code []byte) (*EOF1Container, error) {
 	var container *EOF1Container
 	if evm.chainRules.IsShanghai && hasEOFMagic(code) {
-		c, err := NewEOF1Container(code, evm.interpreter.cfg.JumpTable, false)
+		c, err := ParseAndValidateEOF1Container(code, evm.interpreter.cfg.JumpTable)
 		if err != nil {
 			return nil, err
 		}
-		container = &c
+		container = c
 	}
 	return container, nil
 }
