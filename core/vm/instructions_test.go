@@ -588,7 +588,7 @@ func TestOpTstore(t *testing.T) {
 		to             = common.Address{1}
 		contractRef    = contractRef{caller}
 		contract       = NewContract(contractRef, AccountRef(to), new(big.Int), 0)
-		scopeContext   = ScopeContext{mem, stack, contract}
+		scopeContext   = ScopeContext{mem, stack, contract, 0, nil}
 		value          = common.Hex2Bytes("abcdef00000000000000abba000000000deaf000000c0de00100000000133700")
 	)
 

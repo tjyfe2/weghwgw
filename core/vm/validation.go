@@ -26,7 +26,7 @@ import (
 func validateCode(code []byte, codeSections int, jumpTable *JumpTable) error {
 	var (
 		i        = 0
-		analysis = codeBitmap(code)
+		analysis bitvec
 		opcode   OpCode
 	)
 	for i < len(code) {
@@ -51,15 +51,17 @@ func validateCode(code []byte, codeSections int, jumpTable *JumpTable) error {
 			}
 			// Check if offset points to non-code segment.
 			// TODO(matt): include CALLF and RJUMPs in analysis.
+			if analysis == nil {
+				analysis = codeBitmap(code)
+			}
 			if !analysis.codeSegment(uint64(pos)) {
 				return ErrEOF1InvalidRelativeOffset
 			}
 			i += 3
 		case opcode == CALLF:
-			var arg int16
-			// Read immediate argument.
-			if err := binary.Read(bytes.NewReader(code[i+1:]), binary.BigEndian, &arg); err != nil {
-				return fmt.Errorf("%v: %v", ErrEOF1InvalidCallfSection, err)
+			arg, err := parseArg(code[i+1:])
+			if err != nil {
+				return ErrEOF1InvalidCallfSection
 			}
 			if int(arg) >= codeSections {
 				return fmt.Errorf("%v: want section %v, but only have %d sections", ErrEOF1InvalidCallfSection, arg, codeSections)

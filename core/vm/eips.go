@@ -36,8 +36,6 @@ var activators = map[int]func(*JumpTable){
 	1884: enable1884,
 	1344: enable1344,
 	1153: enable1153,
-	3540: enable3540,
-	3670: enable3670,
 	4200: enable4200,
 	4750: enable4750,
 }
@@ -240,14 +238,6 @@ func opPush0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	return nil, nil
 }
 
-func enable3540(jt *JumpTable) {
-	// Do nothing.
-}
-
-func enable3670(jt *JumpTable) {
-	// Do nothing.
-}
-
 // enable4200 applies EIP-4200 (RJUMP and RJUMPI opcodes)
 func enable4200(jt *JumpTable) {
 	jt[RJUMP] = &operation{
@@ -313,6 +303,8 @@ func opRjumpi(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 
 // enable4750 applies EIP-4750 (CALLF and RETF opcodes)
 func enable4750(jt *JumpTable) {
+	jt[JUMP].legacyOnly = true
+	jt[JUMPI].legacyOnly = true
 	jt[CALLF] = &operation{
 		execute:     opCallf,
 		constantGas: GasMidStep,

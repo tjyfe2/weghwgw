@@ -100,10 +100,6 @@ func (c *Contract) validJumpdest(dest *uint256.Int) bool {
 // isCode returns true if the provided PC location is an actual opcode, as
 // opposed to a data-segment following a PUSHN operation.
 func (c *Contract) isCode(udest uint64) bool {
-	if !c.IsLegacy() {
-		// TODO remove this
-		panic("shouldn't run jumpdest analysis on EOF")
-	}
 	// Do we already have an analysis laying around?
 	if c.analysis != nil {
 		return c.analysis.codeSegment(udest)
