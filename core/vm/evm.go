@@ -473,8 +473,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	if err == nil && hasEOFByte(ret) {
 		if evm.chainRules.IsShanghai {
-			_, err := ParseAndValidateEOF1Container(ret, evm.interpreter.cfg.JumpTable)
+			c, err := ParseEOF1Container(ret)
 			if err != nil {
+				err = ErrInvalidEOFCode
+			}
+			if err := c.ValidateCode(evm.Interpreter().cfg.JumpTable); err != nil {
 				err = ErrInvalidEOFCode
 			}
 		} else if evm.chainRules.IsLondon {
@@ -530,8 +533,11 @@ func (evm *EVM) mustParseContainer(code []byte) *EOF1Container {
 func (evm *EVM) parseContainer(code []byte) (*EOF1Container, error) {
 	var container *EOF1Container
 	if evm.chainRules.IsShanghai && hasEOFMagic(code) {
-		c, err := ParseAndValidateEOF1Container(code, evm.interpreter.cfg.JumpTable)
+		c, err := ParseEOF1Container(code)
 		if err != nil {
+			return nil, err
+		}
+		if err := c.ValidateCode(evm.Interpreter().cfg.JumpTable); err != nil {
 			return nil, err
 		}
 		container = c
