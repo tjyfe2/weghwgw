@@ -476,8 +476,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 			c, err := ParseEOF1Container(ret)
 			if err != nil {
 				err = ErrInvalidEOFCode
-			}
-			if err := c.ValidateCode(evm.Interpreter().cfg.JumpTable); err != nil {
+			} else if err := c.ValidateCode(evm.Interpreter().cfg.JumpTable); err != nil {
 				err = ErrInvalidEOFCode
 			}
 		} else if evm.chainRules.IsLondon {
