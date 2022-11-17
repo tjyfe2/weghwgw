@@ -473,10 +473,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	if err == nil && hasEOFByte(ret) {
 		if evm.chainRules.IsShanghai {
-			c, err := ParseEOF1Container(ret)
+			var c *EOF1Container
+			c, err = ParseEOF1Container(ret)
 			if err != nil {
 				err = ErrInvalidEOFCode
-			} else if err := c.ValidateCode(evm.Interpreter().cfg.JumpTable); err != nil {
+			} else if err = c.ValidateCode(evm.Interpreter().cfg.JumpTable); err != nil {
 				err = ErrInvalidEOFCode
 			}
 		} else if evm.chainRules.IsLondon {
