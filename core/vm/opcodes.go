@@ -118,8 +118,6 @@ const (
 	JUMPDEST OpCode = 0x5b
 	RJUMP    OpCode = 0x5c
 	RJUMPI   OpCode = 0x5d
-	CALLF    OpCode = 0x5e
-	RETF     OpCode = 0x49
 	PUSH0    OpCode = 0x5f
 )
 
@@ -206,6 +204,12 @@ const (
 	LOG2
 	LOG3
 	LOG4
+)
+
+// 0xb0 range - control flow ops.
+const (
+	CALLF OpCode = 0xb0 + iota
+	RETF
 )
 
 // 0xf0 range - closures.
