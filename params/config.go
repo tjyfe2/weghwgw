@@ -371,7 +371,7 @@ type ChainConfig struct {
 	ArrowGlacierBlock   *big.Int `json:"arrowGlacierBlock,omitempty"`   // Eip-4345 (bomb delay) switch block (nil = no fork, 0 = already activated)
 	GrayGlacierBlock    *big.Int `json:"grayGlacierBlock,omitempty"`    // Eip-5133 (bomb delay) switch block (nil = no fork, 0 = already activated)
 	MergeNetsplitBlock  *big.Int `json:"mergeNetsplitBlock,omitempty"`  // Virtual fork after The Merge to use as a network splitter
-	ShanghaiTime        *big.Int `json:"shanghaiBlock,omitempty"`       // Shanghai switch time (nil = no fork, 0 = already on shanghai)
+	ShanghaiTime        *big.Int `json:"shanghaiTime,omitempty"`        // Shanghai switch time (nil = no fork, 0 = already on shanghai)
 	CancunBlock         *big.Int `json:"cancunBlock,omitempty"`         // Cancun switch block (nil = no fork, 0 = already on cancun)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
