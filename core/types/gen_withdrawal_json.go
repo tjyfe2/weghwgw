@@ -17,7 +17,7 @@ func (w Withdrawal) MarshalJSON() ([]byte, error) {
 	type Withdrawal struct {
 		Index     hexutil.Uint64 `json:"index"`
 		Validator hexutil.Uint64 `json:"validatorIndex"`
-		Address   common.Address `json:"address"`
+		Address   common.Address `json:"recipient"`
 		Amount    *hexutil.Big   `json:"amount"`
 	}
 	var enc Withdrawal
@@ -33,7 +33,7 @@ func (w *Withdrawal) UnmarshalJSON(input []byte) error {
 	type Withdrawal struct {
 		Index     *hexutil.Uint64 `json:"index"`
 		Validator *hexutil.Uint64 `json:"validatorIndex"`
-		Address   *common.Address `json:"address"`
+		Address   *common.Address `json:"recipient"`
 		Amount    *hexutil.Big    `json:"amount"`
 	}
 	var dec Withdrawal
