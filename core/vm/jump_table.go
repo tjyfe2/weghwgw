@@ -92,6 +92,7 @@ func NewShanghaiEOFInstructionSetForTesting() JumpTable {
 
 func newShanghaiInstructionSet() JumpTable {
 	instructionSet := newMergeInstructionSet()
+	enable3855(&instructionSet)
 	enable3860(&instructionSet)
 	return validate(instructionSet)
 }
