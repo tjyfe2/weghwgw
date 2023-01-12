@@ -36,32 +36,38 @@ func init() {
 }
 
 var (
+	errStackOverflow  = errors.New("stack overflow")
+	errStackUnderflow = errors.New("stack underflow")
+
 	jt       vm.JumpTable
-	errorMap = map[string]int{
-		io.ErrUnexpectedEOF.Error():          1,
-		vm.ErrInvalidMagic.Error():           2,
-		vm.ErrInvalidVersion.Error():         3,
-		vm.ErrMissingTypeHeader.Error():      4,
-		vm.ErrInvalidTypeSize.Error():        5,
-		vm.ErrMissingCodeHeader.Error():      6,
-		vm.ErrInvalidCodeHeader.Error():      7,
-		vm.ErrMissingDataHeader.Error():      8,
-		vm.ErrMissingTerminator.Error():      9,
-		vm.ErrTooManyInputs.Error():          10,
-		vm.ErrTooManyOutputs.Error():         11,
-		vm.ErrTooLargeMaxStackHeight.Error(): 12,
-		vm.ErrInvalidCodeSize.Error():        13,
-		vm.ErrInvalidContainerSize.Error():   14,
-		vm.ErrUndefinedInstruction.Error():   15,
-		vm.ErrTruncatedImmediate.Error():     16,
-		vm.ErrInvalidSectionArgument.Error(): 17,
-		vm.ErrInvalidJumpDest.Error():        18,
-		vm.ErrConflictingStack.Error():       19,
-		vm.ErrInvalidBranchCount.Error():     20,
-		vm.ErrInvalidOutputs.Error():         21,
-		vm.ErrInvalidMaxStackHeight.Error():  22,
-		vm.ErrInvalidCodeTermination.Error(): 23,
-		vm.ErrUnreachableCode.Error():        24,
+	errorMap = map[string]string{
+		io.ErrUnexpectedEOF.Error():          "UnexpectedEOF",
+		vm.ErrInvalidMagic.Error():           "InvalidMagic",
+		vm.ErrInvalidVersion.Error():         "InvalidVersion",
+		vm.ErrMissingTypeHeader.Error():      "MissingTypeHeader",
+		vm.ErrInvalidTypeSize.Error():        "InvalidTypeSize",
+		vm.ErrMissingCodeHeader.Error():      "MissingCodeHeader",
+		vm.ErrInvalidCodeHeader.Error():      "InvalidCodeHeader",
+		vm.ErrMissingDataHeader.Error():      "MissingDataHeader",
+		vm.ErrMissingTerminator.Error():      "MissingTerminator",
+		vm.ErrTooManyInputs.Error():          "TooManyInputs",
+		vm.ErrTooManyOutputs.Error():         "TooManyOutputs",
+		vm.ErrTooLargeMaxStackHeight.Error(): "TooLargeMaxStackHeight",
+		vm.ErrInvalidSection0Type.Error():    "InvalidSection0Type",
+		vm.ErrInvalidCodeSize.Error():        "InvalidCodeSize",
+		vm.ErrInvalidContainerSize.Error():   "InvalidContainerSize",
+		vm.ErrUndefinedInstruction.Error():   "UndefinedInstruction",
+		vm.ErrTruncatedImmediate.Error():     "TruncatedImmediate",
+		vm.ErrInvalidSectionArgument.Error(): "InvalidSectionArgument",
+		vm.ErrInvalidJumpDest.Error():        "InvalidJumpDest",
+		vm.ErrConflictingStack.Error():       "ConflictingStack",
+		vm.ErrInvalidBranchCount.Error():     "InvalidBranchCount",
+		vm.ErrInvalidOutputs.Error():         "InvalidOutputs",
+		vm.ErrInvalidMaxStackHeight.Error():  "InvalidMaxStackHeight",
+		vm.ErrInvalidCodeTermination.Error(): "InvalidCodeTermination",
+		vm.ErrUnreachableCode.Error():        "UnreachableCode",
+		errStackOverflow.Error():             "StackOverflow",
+		errStackUnderflow.Error():            "StackUnderflow",
 	}
 )
 
@@ -71,8 +77,8 @@ type EOFTest struct {
 }
 
 type etResult struct {
-	Result    bool `json:"result"`
-	Exception int  `json:"exception,omitempty"`
+	Result    bool   `json:"result"`
+	Exception string `json:"exception,omitempty"`
 }
 
 func eofParser(ctx *cli.Context) error {
@@ -86,7 +92,7 @@ func eofParser(ctx *cli.Context) error {
 			if err2 := errors.Unwrap(err); err2 != nil {
 				err = err2
 			}
-			return fmt.Errorf("err(%d): %w", errorMap[err.Error()], err)
+			return fmt.Errorf("%s: %w", errorMap[err.Error()], err)
 		}
 		fmt.Println("ok.")
 		return nil
@@ -112,16 +118,21 @@ func eofParser(ctx *cli.Context) error {
 				if err2 := errors.Unwrap(err); err2 != nil {
 					err = err2
 				}
+				if u := errors.Unwrap(err); u != nil && u.Error() == errStackOverflow.Error() {
+					err = errStackOverflow
+				} else if u := errors.Unwrap(err); u != nil && u.Error() == errStackUnderflow.Error() {
+					err = errStackUnderflow
+				}
 				if r.Result && err != nil {
 					fmt.Fprintf(os.Stderr, "%s, %s: expected success, got %v\n", name, fork, err)
 					continue
 				}
 				if !r.Result && err == nil {
-					fmt.Fprintf(os.Stderr, "%s, %s: expected error %d, got %v\n", name, fork, r.Exception, err)
+					fmt.Fprintf(os.Stderr, "%s, %s: expected error %s, got %v\n", name, fork, r.Exception, err)
 					continue
 				}
 				if !r.Result && err != nil && r.Exception != errorMap[err.Error()] {
-					fmt.Fprintf(os.Stderr, "%s, %s: expected error %d, got: err(%d): %v\n", name, fork, r.Exception, errorMap[err.Error()], err)
+					fmt.Fprintf(os.Stderr, "%s, %s: expected error %s, got: %s: %v\n", name, fork, r.Exception, errorMap[err.Error()], err)
 					continue
 				}
 				passed++
@@ -131,21 +142,50 @@ func eofParser(ctx *cli.Context) error {
 		return nil
 	}
 
+	out := make(map[string]EOFTest, 0)
+	i := 0
 	// If neither are passed in, read input from stdin.
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		t := strings.TrimSpace(scanner.Text())
+		t = strings.ReplaceAll(t, " ", "")
+		t = strings.ReplaceAll(t, "-", "")
 		if len(t) == 0 || t[0] == '#' {
 			continue
 		}
+		results := make(map[string]etResult)
 		if _, err := parseAndValidate(t); err != nil {
+			mappedErr := err
 			if err2 := errors.Unwrap(err); err2 != nil {
-				err = err2
+				mappedErr = err2
 			}
-			fmt.Fprintf(os.Stderr, "err(%d): %v\n", errorMap[err.Error()], err)
-		}
-	}
 
+			if u := errors.Unwrap(mappedErr); u != nil && u.Error() == errStackOverflow.Error() {
+				mappedErr = errStackOverflow
+			} else if u := errors.Unwrap(mappedErr); u != nil && u.Error() == errStackUnderflow.Error() {
+				mappedErr = errStackUnderflow
+			}
+
+			fmt.Fprintf(os.Stderr, "%s: %v\n", errorMap[mappedErr.Error()], err)
+			results["Cancun"] = etResult{
+				Result:    false,
+				Exception: errorMap[mappedErr.Error()],
+			}
+			i++
+			if errors.Is(err, hex.ErrLength) {
+				continue
+			}
+		} else {
+			i++
+			results["cancun"] = etResult{
+				Result: true,
+			}
+		}
+
+		out[fmt.Sprintf("corpus_test_%d", i)] = EOFTest{Code: t, Results: results}
+	}
+	b, _ := json.MarshalIndent(out, "", "  ")
+	fmt.Println(string(b))
 	return nil
 }
 
@@ -155,7 +195,7 @@ func parseAndValidate(s string) (*vm.Container, error) {
 	}
 	b, err := hex.DecodeString(s)
 	if err != nil {
-		return nil, fmt.Errorf("unable to decode data: %w", err)
+		return nil, fmt.Errorf("unable to decode data (%s): %w", s, err)
 	}
 	var c vm.Container
 	if err := c.UnmarshalBinary(b); err != nil {
