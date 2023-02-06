@@ -199,12 +199,30 @@ func writeVersion(w *e2store.Writer) error {
 // Reader reads an Era archive.
 // See Builder documentation for a detailed explanation of the Era format.
 type Reader struct {
-	r io.ReadSeeker
+	r      io.ReadSeeker
+	offset *uint64
 }
 
 // NewReader returns a new Reader instance.
 func NewReader(r io.ReadSeeker) *Reader {
 	return &Reader{r: r}
+}
+
+// Read reads one (block, receipts) tuple from an Era archive.
+func (r *Reader) Read() (*types.Block, *types.Receipts, error) {
+	if r.offset == nil {
+		m, err := readMetadata(r)
+		if err != nil {
+			return nil, nil, err
+		}
+		r.offset = &m.start
+	}
+	block, receipts, err := r.ReadBlockAndReceipts(*r.offset)
+	if err != nil {
+		return nil, nil, err
+	}
+	*r.offset += 1
+	return block, receipts, nil
 }
 
 // ReadBlock reads the block number n from the Era archive.
@@ -234,6 +252,21 @@ func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
 		return nil, fmt.Errorf("malformed era, wrong block number (want %d, got %d)", n, b.NumberU64())
 	}
 	return b, err
+}
+
+// ReadBlockAndReceipts reads the block number n and associated receipts from
+// the Era archive.
+
+// The method returns error if the Era file is malformed, the request is
+// out-of-bounds, as determined by the block index, or if the block number at
+// the calculated offset doesn't match the requested.
+func (r *Reader) ReadBlockAndReceipts(n uint64) (*types.Block, *types.Receipts, error) {
+	block, err := r.ReadBlock(n)
+	if err != nil {
+		return nil, nil, err
+	}
+	receipts, err := readReceipts(r)
+	return block, receipts, err
 }
 
 // metadata wraps the metadata in the block index.
@@ -309,6 +342,31 @@ func readBlockAtOffset(r *Reader, offset int64) (*types.Block, error) {
 		return nil, fmt.Errorf("error decoding block: %w", err)
 	}
 	return &block, nil
+}
+
+// readReceipts reads a snappy encoded list of receipts.
+//
+// Note, this method expects the file cursor to be located immediately at the
+// beginning of the e2store entry for the receipts.
+func readReceipts(r *Reader) (*types.Receipts, error) {
+	// Read e2store entry.
+	entry, err := e2store.NewReader(r.r).Read()
+	if err != nil {
+		return nil, err
+	}
+	if entry.Type != TypeCompressedReceipt {
+		return nil, fmt.Errorf("expected receipts entry, got %x", entry.Type)
+	}
+	// Read block from snappy framing.
+	b, err := io.ReadAll(snappy.NewReader(bytes.NewReader(entry.Value)))
+	if err != nil {
+		return nil, fmt.Errorf("error decoding snappy: %w", err)
+	}
+	var receipts types.Receipts
+	if err := rlp.DecodeBytes(b, &receipts); err != nil {
+		return nil, fmt.Errorf("error decoding block: %w", err)
+	}
+	return &receipts, nil
 }
 
 // seek is a shorthand method for calling seek on the inner reader.
