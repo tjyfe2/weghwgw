@@ -300,6 +300,10 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 	if name, ok := params.NetworkNames[bc.Config().ChainID.String()]; ok {
 		network = name
 	}
+	var (
+		start    = time.Now()
+		reported = time.Now()
+	)
 	for i := uint64(0); i < last; i += step {
 		// Open file for Era.
 		fn := path.Join(dir, fmt.Sprintf("%s-%05d.era", network, i/step))
@@ -307,7 +311,6 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 		if err != nil {
 			return err
 		}
-		defer fh.Close()
 
 		// Cap last step to available blocks.
 		if last < i+step {
@@ -332,8 +335,13 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 		if err := w.Finalize(); err != nil {
 			return fmt.Errorf("export failed to finalize %s: %w", fn, err)
 		}
-		log.Info("Exported blockchain to", "dir", dir, "fn", fn)
+		if time.Since(reported) >= 10*time.Second {
+			log.Info("Exporting blocks", "exported", i, "elapsed", common.PrettyDuration(time.Since(start)))
+			reported = time.Now()
+		}
+		fh.Close()
 	}
+	log.Info("Exported blockchain to", "dir", dir)
 
 	return nil
 }
