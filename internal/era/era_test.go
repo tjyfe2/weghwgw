@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 func makeTestChain() ([]*types.Block, []types.Receipts) {
@@ -39,7 +40,7 @@ func makeTestChain() ([]*types.Block, []types.Receipts) {
 		}
 		signer = types.LatestSigner(genesis.Config)
 	)
-	_, b, r := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 16, func(i int, g *core.BlockGen) {
+	_, b, r := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 128, func(i int, g *core.BlockGen) {
 		if i == 0 {
 			return
 		}
@@ -87,12 +88,18 @@ func TestEraBuilder(t *testing.T) {
 	// Verify Era contents.
 	r := NewReader(f)
 	for _, want := range blocks {
-		got, err := r.ReadBlock(want.NumberU64())
+		b, r, err := r.ReadBlockAndReceipts(want.NumberU64())
 		if err != nil {
 			t.Fatalf("error reading block from era: %v", err)
 		}
-		if got, want := got.Hash(), want.Hash(); got != want {
-			t.Fatalf("unexpected block (want %s, got %s)", want.Hex(), got.Hex())
+		if want, got := want.NumberU64(), b.NumberU64(); want != got {
+			t.Fatalf("blocks out of order: want %d, got %d", want, got)
+		}
+		if want.Hash() != b.Hash() {
+			t.Fatalf("block hash mistmatch %d: want %s, got %s", want.NumberU64(), want.Hash().Hex(), b.Hash().Hex())
+		}
+		if got := types.DeriveSha(r, trie.NewStackTrie(nil)); got != want.ReceiptHash() {
+			t.Fatalf("receipt root %d mismatch: want %s, got %s", want.NumberU64(), want.ReceiptHash(), got)
 		}
 	}
 }
