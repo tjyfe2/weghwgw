@@ -18,6 +18,7 @@ package e2store
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 )
 
@@ -104,6 +105,7 @@ func (r *Reader) Read() (*Entry, error) {
 	length += uint64(b[5]) << 24
 	length += uint64(b[6]) << 32
 	length += uint64(b[7]) << 40
+	fmt.Println(typ, length)
 
 	val := make([]byte, length)
 	if _, err := io.ReadFull(r.r, val); err != nil {

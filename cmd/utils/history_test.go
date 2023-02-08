@@ -36,8 +36,8 @@ import (
 )
 
 var (
-	count uint64 = 32
-	step  uint64 = 4
+	count uint64 = 128
+	step  uint64 = 10
 )
 
 func TestHistoryExporter(t *testing.T) {
@@ -103,7 +103,9 @@ func TestHistoryExporter(t *testing.T) {
 		}
 		r := era.NewReader(f)
 		for j := 0; ; j += 1 {
+			fmt.Println(i + j)
 			b, r, err := r.Read()
+			fmt.Println("read")
 			if err == io.EOF {
 				break
 			} else if err != nil {
