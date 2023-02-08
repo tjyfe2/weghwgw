@@ -346,8 +346,9 @@ func readBlockAtOffset(r *Reader, offset int64) (*types.Block, error) {
 
 // readReceipts reads a snappy encoded list of receipts.
 //
-// Note, this method expects the file cursor to be located immediately at the
-// beginning of the e2store entry for the receipts.
+// Note, this method expects the file cursor to be located at the beginning of
+// the e2store entry for the receipts, and so it should generally be called
+// after readBlockAtOffset.
 func readReceipts(r *Reader) (*types.Receipts, error) {
 	// Read e2store entry.
 	entry, err := e2store.NewReader(r.r).Read()
