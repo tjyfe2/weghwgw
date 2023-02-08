@@ -17,7 +17,6 @@
 package e2store
 
 import (
-	"bufio"
 	"io"
 )
 
@@ -76,14 +75,12 @@ func (w *Writer) CurrentOffset() (int64, error) {
 // For more information on this format, see
 // https://github.com/status-im/nimbus-eth2/blob/stable/docs/e2store.md
 type Reader struct {
-	r *bufio.Reader
+	r io.Reader
 }
 
 // NewReader returns a new Reader that reads from r.
 func NewReader(r io.Reader) *Reader {
-	return &Reader{
-		r: bufio.NewReader(r),
-	}
+	return &Reader{r}
 }
 
 // Read reads one Entry from r.
