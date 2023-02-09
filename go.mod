@@ -20,6 +20,7 @@ require (
 	github.com/dop251/goja v0.0.0-20230122112309-96b1610dd4f7
 	github.com/edsrzf/mmap-go v1.0.0
 	github.com/fatih/color v1.7.0
+	github.com/ferranbt/fastssz v0.1.2
 	github.com/fjl/gencodec v0.0.0-20220412091415-8bb9e558978c
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/fsnotify/fsnotify v1.6.0
@@ -51,6 +52,7 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
 	github.com/prysmaticlabs/go-ssz v0.0.0-20210121151755-f6208871c388
+	github.com/prometheus/tsdb v0.7.1
 	github.com/rs/cors v1.7.0
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
 	github.com/status-im/keycard-go v0.2.0
@@ -89,16 +91,12 @@ require (
 	github.com/crate-crypto/go-ipa v0.0.0-20220523130400-f11357ae11c7 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/deepmap/oapi-codegen v1.8.2 // indirect
-	github.com/dgraph-io/ristretto v0.1.1 // indirect
 	github.com/dlclark/regexp2 v1.7.0 // indirect
-	github.com/dustin/go-humanize v1.0.0 // indirect
-	github.com/ferranbt/fastssz v0.1.2 // indirect
 	github.com/garslo/gogen v0.0.0-20170306192744-1d203ffc1f61 // indirect
 	github.com/getsentry/sentry-go v0.18.0 // indirect
 	github.com/go-ole/go-ole v1.2.1 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
 	github.com/influxdata/line-protocol v0.0.0-20210311194329-9aa0e372d097 // indirect
 	github.com/klauspost/compress v1.15.15 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
@@ -106,7 +104,6 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
-	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/minio/sha256-simd v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/mitchellh/pointerstructure v1.2.0 // indirect
@@ -119,8 +116,6 @@ require (
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.39.0 // indirect
 	github.com/prometheus/procfs v0.9.0 // indirect
-	github.com/protolambda/zssz v0.1.5 // indirect
-	github.com/prysmaticlabs/go-bitfield v0.0.0-20210809151128-385d8c5e3fb7 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.5 // indirect

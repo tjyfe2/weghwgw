@@ -21,13 +21,14 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/e2store"
 	"github.com/ethereum/go-ethereum/rlp"
+	ssz "github.com/ferranbt/fastssz"
 	"github.com/golang/snappy"
-	ssz "github.com/prysmaticlabs/go-ssz"
 )
 
 var (
@@ -73,20 +74,20 @@ type Builder struct {
 	w       *e2store.Writer
 	start   *uint64
 	indexes []uint64
-	hashes  []common.Hash
+	records []headerRecord
 }
 
 // NewBuilder returns a new Builder instance.
 func NewBuilder(w io.WriteSeeker) *Builder {
 	return &Builder{
-		w:      e2store.NewWriter(w),
-		hashes: make([]common.Hash, 0),
+		w:       e2store.NewWriter(w),
+		records: make([]headerRecord, 0),
 	}
 }
 
 // Add writes a compressed block entry and compressed receipts entry to the
 // underlying e2store file.
-func (b *Builder) Add(block *types.Block, receipts types.Receipts) error {
+func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) error {
 	// Write Era version entry before first block.
 	if b.start == nil {
 		if err := writeVersion(b.w); err != nil {
@@ -105,7 +106,7 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts) error {
 		return err
 	}
 	b.indexes = append(b.indexes, uint64(offset))
-	b.hashes = append(b.hashes, block.Hash())
+	b.records = append(b.records, headerRecord{block.Hash(), td})
 
 	// Write block.
 	encBlock, err := rlp.EncodeToBytes(block)
@@ -149,9 +150,9 @@ func (b *Builder) Finalize() error {
 		return fmt.Errorf("finalize called on empty builder")
 	}
 	// Compute accumulator root and write entry.
-	root, err := ssz.HashTreeRootWithCapacity(b.hashes, uint64(MaxEraBatchSize))
+	root, err := computeAccumulatorRoot(b.records)
 	if err != nil {
-		return fmt.Errorf("unable to compute accumulator root: %w", err)
+		return fmt.Errorf("error calculating accumulator root: %w", err)
 	}
 	b.w.Write(TypeAccumulator, root[:])
 
@@ -269,6 +270,11 @@ func (r *Reader) ReadBlockAndReceipts(n uint64) (*types.Block, *types.Receipts, 
 	return block, receipts, err
 }
 
+// seek is a shorthand method for calling seek on the inner reader.
+func (r *Reader) seek(offset int64, whence int) (int64, error) {
+	return r.r.Seek(offset, whence)
+}
+
 // metadata wraps the metadata in the block index.
 type metadata struct {
 	start, count uint64
@@ -370,7 +376,44 @@ func readReceipts(r *Reader) (*types.Receipts, error) {
 	return &receipts, nil
 }
 
-// seek is a shorthand method for calling seek on the inner reader.
-func (r *Reader) seek(offset int64, whence int) (int64, error) {
-	return r.r.Seek(offset, whence)
+// headerRecord is an individual record for a historical header.
+//
+// See https://github.com/ethereum/portal-network-specs/blob/master/history-network.md#the-header-accumulator
+// for more information.
+type headerRecord struct {
+	Hash            common.Hash
+	TotalDifficulty *big.Int
+}
+
+// GetTree completes the ssz.HashRoot interface, but is unused.
+func (h *headerRecord) GetTree() (*ssz.Node, error) {
+	return nil, nil
+}
+
+// HashTreeRoot ssz hashes the headerRecord object.
+func (h *headerRecord) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(h)
+}
+
+// HashTreeRootWith ssz hashes the headerRecord object with a hasher.
+func (h *headerRecord) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	hh.PutBytes(h.Hash[:])
+	hh.PutBytes(h.TotalDifficulty.FillBytes(make([]byte, 32))[:])
+	hh.Merkleize(0)
+	return
+}
+
+// computeAccumulatorRoot calculates the SSZ hash tree root of the Era
+// accumulator of header records.
+func computeAccumulatorRoot(records []headerRecord) (common.Hash, error) {
+	hh := ssz.NewHasher()
+	for _, rec := range records {
+		root, err := rec.HashTreeRoot()
+		if err != nil {
+			return common.Hash{}, err
+		}
+		hh.Append(root[:])
+	}
+	hh.MerkleizeWithMixin(0, uint64(len(records)), uint64(MaxEraBatchSize))
+	return hh.HashRoot()
 }
