@@ -25,12 +25,13 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-func makeTestChain() ([]*types.Block, []types.Receipts) {
+func makeTestChain() *core.BlockChain {
 	var (
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		address = crypto.PubkeyToAddress(key.PublicKey)
@@ -40,7 +41,7 @@ func makeTestChain() ([]*types.Block, []types.Receipts) {
 		}
 		signer = types.LatestSigner(genesis.Config)
 	)
-	_, b, r := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 128, func(i int, g *core.BlockGen) {
+	db, b, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 128, func(i int, g *core.BlockGen) {
 		if i == 0 {
 			return
 		}
@@ -57,7 +58,9 @@ func makeTestChain() ([]*types.Block, []types.Receipts) {
 		})
 		g.AddTx(tx)
 	})
-	return b, r
+	chain, _ := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain.InsertChain(b)
+	return chain
 }
 
 func TestEraBuilder(t *testing.T) {
@@ -69,13 +72,19 @@ func TestEraBuilder(t *testing.T) {
 	defer f.Close()
 
 	var (
-		blocks, receipts = makeTestChain()
-		builder          = NewBuilder(f)
+		chain   = makeTestChain()
+		builder = NewBuilder(f)
 	)
 
 	// Write blocks to Era.
-	for i := range blocks {
-		if err := builder.Add(blocks[i], receipts[i]); err != nil {
+	head := chain.CurrentBlock().NumberU64()
+	for i := uint64(0); i < head; i++ {
+		var (
+			block    = chain.GetBlockByNumber(i)
+			receipts = chain.GetReceiptsByHash(block.Hash())
+			td       = chain.GetTd(block.Hash(), i)
+		)
+		if err := builder.Add(block, receipts, td); err != nil {
 			t.Fatalf("error adding entry: %v", err)
 		}
 	}
@@ -87,7 +96,8 @@ func TestEraBuilder(t *testing.T) {
 
 	// Verify Era contents.
 	r := NewReader(f)
-	for _, want := range blocks {
+	for i := uint64(0); i < head; i++ {
+		want := chain.GetBlockByNumber(i)
 		b, r, err := r.ReadBlockAndReceipts(want.NumberU64())
 		if err != nil {
 			t.Fatalf("error reading block from era: %v", err)
