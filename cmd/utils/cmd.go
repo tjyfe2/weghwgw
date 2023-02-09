@@ -336,7 +336,14 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 				if receipts == nil {
 					return fmt.Errorf("export failed on #%d: receipts not found", nr)
 				}
-				if err := w.Add(block, receipts); err != nil {
+				td := bc.GetTd(block.Hash(), block.NumberU64())
+				if td == nil {
+					return fmt.Errorf("export failed on #%d: total difficulty not found", nr)
+				}
+				if receipts == nil {
+					return fmt.Errorf("export failed on #%d: receipts not found", nr)
+				}
+				if err := w.Add(block, receipts, td); err != nil {
 					return err
 				}
 			}
