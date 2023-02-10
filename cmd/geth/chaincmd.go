@@ -376,7 +376,7 @@ func exportChain(ctx *cli.Context) error {
 // exportHistory exports chain history in Era archives at a specified
 // directory.
 func exportHistory(ctx *cli.Context) error {
-	if ctx.Args().Len() != 3 {
+	if ctx.Args().Len() != 4 {
 		utils.Fatalf("This command requires an argument.")
 	}
 
