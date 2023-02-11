@@ -300,27 +300,26 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 	if name, ok := params.NetworkNames[bc.Config().ChainID.String()]; ok {
 		network = name
 	}
+	err := os.Mkdir(dir, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("error creating output directory: %w", err)
+	}
 	var (
 		start    = time.Now()
 		reported = time.Now()
 	)
-	for i := uint64(0); i < last; i += step {
+	for i := uint64(0); i <= last; i += step {
 		gen := func() error {
 			// Open file for Era.
 			fn := path.Join(dir, fmt.Sprintf("%s-%05d.era", network, i/step))
-			fh, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
+			fh, err := os.Create(fn)
 			if err != nil {
 				return err
 			}
 			defer fh.Close()
 
-			// Cap last step to available blocks.
-			if last < i+step {
-				step = last - i
-			}
-
 			w := era.NewBuilder(fh)
-			for j := uint64(0); j < step; j++ {
+			for j := uint64(0); j < step && j <= last-i; j++ {
 				nr := i + j
 				block := bc.GetBlockByNumber(nr)
 				if block == nil {
