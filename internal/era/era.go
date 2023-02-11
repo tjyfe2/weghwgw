@@ -398,7 +398,12 @@ func (h *headerRecord) HashTreeRoot() ([32]byte, error) {
 // HashTreeRootWith ssz hashes the headerRecord object with a hasher.
 func (h *headerRecord) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	hh.PutBytes(h.Hash[:])
-	hh.PutBytes(h.TotalDifficulty.FillBytes(make([]byte, 32))[:])
+	b := h.TotalDifficulty.FillBytes(make([]byte, 32))
+	// convert to little endian
+	for i := 0; i < len(b)/2; i++ {
+		b[i], b[len(b)-i-1] = b[len(b)-i-1], b[i]
+	}
+	hh.PutBytes(b[:])
 	hh.Merkleize(0)
 	return
 }
