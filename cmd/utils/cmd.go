@@ -300,14 +300,9 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 	if name, ok := params.NetworkNames[bc.Config().ChainID.String()]; ok {
 		network = name
 	}
-
-	// Create direcotry if it doesn't exist.
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := os.Mkdir(dir, os.ModePerm); err != nil {
-			return fmt.Errorf("error creating output directory: %w", err)
-		}
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		return fmt.Errorf("error creating output directory: %w", err)
 	}
-
 	var (
 		start    = time.Now()
 		reported = time.Now()
