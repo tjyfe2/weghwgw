@@ -36,10 +36,36 @@ var (
 	TypeCompressedBlock   uint16 = 0x03
 	TypeCompressedReceipt uint16 = 0x04
 	TypeAccumulator       uint16 = 0x05
+	TypeTotalDifficulty   uint16 = 0x06
 	TypeBlockIndex        uint16 = 0x3266
 
 	MaxEraBatchSize = 8192
 )
+
+// Filename returns a recognizable Era-formatted file name for the specified
+// epoch and network.
+func Filename(epoch int, network string) string {
+	return fmt.Sprintf("%s-%05d.era", network, epoch)
+}
+
+// ComputeAccumulator calculates the SSZ hash tree root of the Era
+// accumulator of header records.
+func ComputeAccumulator(hashes []common.Hash, tds []*big.Int) (common.Hash, error) {
+	if len(hashes) != len(tds) {
+		return common.Hash{}, fmt.Errorf("must have equal number hashes as td values")
+	}
+	hh := ssz.NewHasher()
+	for i := range hashes {
+		rec := headerRecord{hashes[i], tds[i]}
+		root, err := rec.HashTreeRoot()
+		if err != nil {
+			return common.Hash{}, err
+		}
+		hh.Append(root[:])
+	}
+	hh.MerkleizeWithMixin(0, uint64(len(hashes)), uint64(MaxEraBatchSize))
+	return hh.HashRoot()
+}
 
 // Builder is used to create Era archives of block data.
 //
@@ -48,16 +74,17 @@ var (
 //
 // The overall structure of an Era file can be summarized with this definition:
 //
-//	era := Version | block-tuple* | other-entries* | Accumulator | BlockIndex
+//	era := Version | block-tuple* | other-entries* | Accumulator | StartTD | BlockIndex
 //	block-tuple :=  CompressedBlock | CompressedReceipts
 //
 // Each basic element is its own entry:
 //
-//	Version            = { type: 0x3265, data: nil }
-//	CompressedBlock    = { type: 0x03,   data: snappyFramed(rlp(block)) }
-//	CompressedReceipts = { type: 0x04,   data: snappyFramed(rlp(receipts)) }
-//	Accumulator        = { type: 0x05,   data: hash_tree_root(blockHashes, 8192) }
-//	BlockIndex         = { type: 0x3266, data: block-index }
+//	Version            = { type: [0x65, 0x32], data: nil }
+//	CompressedBlock    = { type: [0x03, 0x00], data: snappyFramed(rlp(block)) }
+//	CompressedReceipts = { type: [0x04, 0x00], data: snappyFramed(rlp(receipts)) }
+//	Accumulator        = { type: [0x05, 0x00], data: hash_tree_root(blockHashes, 8192) }
+//	StartTD            = { type: [0x06, 0x00], data: uint256(startingTotalDifficulty) }
+//	BlockIndex         = { type: [0x32, 0x66], data: block-index }
 //
 // BlockIndex stores relative offsets to each compressed block entry. The
 // format is:
@@ -71,17 +98,20 @@ var (
 // Due to the accumulator size limit of 8192, the maximum number of blocks in
 // an Era batch is also 8192.
 type Builder struct {
-	w       *e2store.Writer
-	start   *uint64
-	indexes []uint64
-	records []headerRecord
+	w        *e2store.Writer
+	startNum *uint64
+	startTd  *big.Int
+	indexes  []uint64
+	hashes   []common.Hash
+	tds      []*big.Int
 }
 
 // NewBuilder returns a new Builder instance.
 func NewBuilder(w io.WriteSeeker) *Builder {
 	return &Builder{
-		w:       e2store.NewWriter(w),
-		records: make([]headerRecord, 0),
+		w:      e2store.NewWriter(w),
+		hashes: make([]common.Hash, 0),
+		tds:    make([]*big.Int, 0),
 	}
 }
 
@@ -89,12 +119,13 @@ func NewBuilder(w io.WriteSeeker) *Builder {
 // underlying e2store file.
 func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) error {
 	// Write Era version entry before first block.
-	if b.start == nil {
+	if b.startNum == nil {
 		if err := writeVersion(b.w); err != nil {
 			return err
 		}
 		n := block.NumberU64()
-		b.start = &n
+		b.startNum = &n
+		b.startTd = new(big.Int).Sub(td, block.Difficulty())
 	}
 	if len(b.indexes) >= MaxEraBatchSize {
 		return fmt.Errorf("exceeds maximum batch size of %d", MaxEraBatchSize)
@@ -106,7 +137,8 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) 
 		return err
 	}
 	b.indexes = append(b.indexes, uint64(offset))
-	b.records = append(b.records, headerRecord{block.Hash(), td})
+	b.hashes = append(b.hashes, block.Hash())
+	b.tds = append(b.tds, td)
 
 	// Write block.
 	encBlock, err := rlp.EncodeToBytes(block)
@@ -146,15 +178,23 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) 
 // Finalize computes the accumulator and block index values, then writes the
 // corresponding e2store entries.
 func (b *Builder) Finalize() error {
-	if b.start == nil {
+	if b.startNum == nil {
 		return fmt.Errorf("finalize called on empty builder")
 	}
 	// Compute accumulator root and write entry.
-	root, err := computeAccumulatorRoot(b.records)
+	root, err := ComputeAccumulator(b.hashes, b.tds)
 	if err != nil {
 		return fmt.Errorf("error calculating accumulator root: %w", err)
 	}
-	b.w.Write(TypeAccumulator, root[:])
+	if _, err := b.w.Write(TypeAccumulator, root[:]); err != nil {
+		return fmt.Errorf("error writing accumulator: %w", err)
+	}
+
+	// Write initial total difficulty.
+	td := bigToBytes32(b.startTd)
+	if _, err := b.w.Write(TypeTotalDifficulty, td[:]); err != nil {
+		return fmt.Errorf("error writing total difficulty: %w", err)
+	}
 
 	// Get beginning of index entry to calculate block relative offset.
 	base, err := b.w.CurrentOffset()
@@ -170,7 +210,7 @@ func (b *Builder) Finalize() error {
 		count = len(b.indexes)
 		index = make([]byte, 16+count*8)
 	)
-	binary.LittleEndian.PutUint64(index, *b.start)
+	binary.LittleEndian.PutUint64(index, *b.startNum)
 	// Each offset is relative from the position it is encoded in the
 	// index. This means that even if the same block was to be included in
 	// the index twice (this would be invalid anyways), the relative offset
@@ -200,14 +240,23 @@ func writeVersion(w *e2store.Writer) error {
 // Reader reads an Era archive.
 // See Builder documentation for a detailed explanation of the Era format.
 type Reader struct {
-	r      io.ReadSeeker
+	r      io.ReadSeekCloser
 	offset *uint64
 }
 
 // NewReader returns a new Reader instance.
-func NewReader(r io.ReadSeeker) *Reader {
+func NewReader(r io.ReadSeekCloser) *Reader {
 	return &Reader{r: r}
 }
+
+// Open opens an Era file and returns a Reader to it.
+// func Open(name string) (*Reader, error) {
+//         f, err := os.Open(name)
+//         if err != nil {
+//                 return nil, fmt.Errorf("error opening era file %s: %w", name, err)
+//         }
+//         return NewReader(f), nil
+// }
 
 // Read reads one (block, receipts) tuple from an Era archive.
 func (r *Reader) Read() (*types.Block, *types.Receipts, error) {
@@ -268,6 +317,43 @@ func (r *Reader) ReadBlockAndReceipts(n uint64) (*types.Block, *types.Receipts, 
 	}
 	receipts, err := readReceipts(r)
 	return block, receipts, err
+}
+
+// Accumulator reads the accumulator entry in the Era file.
+func (r *Reader) Accumulator() (common.Hash, error) {
+	_, err := r.seek(0, io.SeekStart)
+	entry, err := e2store.NewReader(r.r).Find(TypeAccumulator)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return common.BytesToHash(entry.Value), nil
+}
+
+// TotalDifficulty reads the total difficulty entry in the Era file.
+func (r *Reader) TotalDifficulty() (*big.Int, error) {
+	_, err := r.seek(0, io.SeekStart)
+	entry, err := e2store.NewReader(r.r).Find(TypeTotalDifficulty)
+	if err != nil {
+		return nil, err
+	}
+	return new(big.Int).SetBytes(reverseOrder(entry.Value)), nil
+}
+
+// Start returns the listed start block.
+func (r *Reader) Start() (uint64, error) {
+	m, err := readMetadata(r)
+	return m.start, err
+}
+
+// Count returns the total number of blocks in the Era.
+func (r *Reader) Count() (uint64, error) {
+	m, err := readMetadata(r)
+	return m.count, err
+}
+
+// Close implements a closer.
+func (r *Reader) Close() error {
+	return r.r.Close()
 }
 
 // seek is a shorthand method for calling seek on the inner reader.
@@ -398,27 +484,23 @@ func (h *headerRecord) HashTreeRoot() ([32]byte, error) {
 // HashTreeRootWith ssz hashes the headerRecord object with a hasher.
 func (h *headerRecord) HashTreeRootWith(hh ssz.HashWalker) (err error) {
 	hh.PutBytes(h.Hash[:])
-	b := h.TotalDifficulty.FillBytes(make([]byte, 32))
-	// convert to little endian
-	for i := 0; i < len(b)/2; i++ {
-		b[i], b[len(b)-i-1] = b[len(b)-i-1], b[i]
-	}
-	hh.PutBytes(b[:])
+	td := bigToBytes32(h.TotalDifficulty)
+	hh.PutBytes(td[:])
 	hh.Merkleize(0)
 	return
 }
 
-// computeAccumulatorRoot calculates the SSZ hash tree root of the Era
-// accumulator of header records.
-func computeAccumulatorRoot(records []headerRecord) (common.Hash, error) {
-	hh := ssz.NewHasher()
-	for _, rec := range records {
-		root, err := rec.HashTreeRoot()
-		if err != nil {
-			return common.Hash{}, err
-		}
-		hh.Append(root[:])
+// bigToBytes32 converts a big.Int into a little-endian 32-byte array.
+func bigToBytes32(n *big.Int) (b [32]byte) {
+	n.FillBytes(b[:])
+	reverseOrder(b[:])
+	return
+}
+
+// reverseOrder reverses the byte order of a slice.
+func reverseOrder(b []byte) []byte {
+	for i := 0; i < 16; i++ {
+		b[i], b[32-i-1] = b[32-i-1], b[i]
 	}
-	hh.MerkleizeWithMixin(0, uint64(len(records)), uint64(MaxEraBatchSize))
-	return hh.HashRoot()
+	return b
 }
