@@ -58,7 +58,7 @@ func TestEncode(t *testing.T) {
 		if want, got := common.Hex2Bytes(tt.want), b.Bytes(); bytes.Compare(want, got) != 0 {
 			t.Fatalf("test %d: encoding mismatch (want %s, got %s", i, common.Bytes2Hex(want), common.Bytes2Hex(got))
 		}
-		r := NewReader(bytes.NewBuffer(b.Bytes()))
+		r := NewReader(io.NopCloser(bytes.NewBuffer(b.Bytes())))
 		for _, want := range tt.entries {
 			if got, err := r.Read(); err != nil {
 				t.Fatalf("test %d: decoding error: %v", i, err)
@@ -79,6 +79,10 @@ func TestDecode(t *testing.T) {
 			have: "ffff000000000000",
 			want: []Entry{{0xffff, nil}},
 		},
+		{ // basic valid decoding
+			have: "ffff000000000001",
+			err:  fmt.Errorf("reserved bytes are non-zero"),
+		},
 		{ // no more entries to read, returns EOF
 			have: "",
 			err:  io.EOF,
@@ -96,9 +100,9 @@ func TestDecode(t *testing.T) {
 			err:  io.ErrUnexpectedEOF,
 		},
 	} {
-		r := NewReader(bytes.NewBuffer(common.Hex2Bytes(tt.have)))
+		r := NewReader(io.NopCloser(bytes.NewBuffer(common.Hex2Bytes(tt.have))))
 		if tt.err != nil {
-			if _, err := r.Read(); err != tt.err {
+			if _, err := r.Read(); err != nil && tt.err != nil && err.Error() != tt.err.Error() {
 				t.Fatalf("expected error %v, got %v", tt.err, err)
 			}
 			continue

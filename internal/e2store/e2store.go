@@ -17,6 +17,7 @@
 package e2store
 
 import (
+	"fmt"
 	"io"
 )
 
@@ -42,8 +43,8 @@ func NewWriter(w io.WriteSeeker) *Writer {
 
 // Write writes a single e2store entry to w.
 // An entry is encoded in a type-length-value format. The first 8 bytes of the
-// record store the type (2 bytes) and the length (6 bytes). The remaining
-// bytes store b.
+// record store the type (2 bytes), the length (4 bytes), and some reserved
+// data (2 bytes). The remaining bytes store b.
 func (w *Writer) Write(typ uint16, b []byte) (int, error) {
 	buf := make([]byte, headerSize+len(b))
 
@@ -57,8 +58,6 @@ func (w *Writer) Write(typ uint16, b []byte) (int, error) {
 	buf[3] = byte(l >> 8)
 	buf[4] = byte(l >> 16)
 	buf[5] = byte(l >> 24)
-	buf[6] = byte(l >> 32)
-	buf[7] = byte(l >> 40)
 
 	// value
 	copy(buf[8:], b)
@@ -75,11 +74,11 @@ func (w *Writer) CurrentOffset() (int64, error) {
 // For more information on this format, see
 // https://github.com/status-im/nimbus-eth2/blob/stable/docs/e2store.md
 type Reader struct {
-	r io.Reader
+	r io.ReadCloser
 }
 
 // NewReader returns a new Reader that reads from r.
-func NewReader(r io.Reader) *Reader {
+func NewReader(r io.ReadCloser) *Reader {
 	return &Reader{r}
 }
 
@@ -99,8 +98,11 @@ func (r *Reader) Read() (*Entry, error) {
 	length += uint64(b[3]) << 8
 	length += uint64(b[4]) << 16
 	length += uint64(b[5]) << 24
-	length += uint64(b[6]) << 32
-	length += uint64(b[7]) << 40
+
+	// Check reserved bytes of header.
+	if b[6] != 0 || b[7] != 0 {
+		return nil, fmt.Errorf("reserved bytes are non-zero")
+	}
 
 	val := make([]byte, length)
 	if _, err := io.ReadFull(r.r, val); err != nil {
@@ -116,4 +118,38 @@ func (r *Reader) Read() (*Entry, error) {
 		Type:  typ,
 		Value: val,
 	}, nil
+}
+
+// Find returns the first entry with the matching type.
+func (r *Reader) Find(typ uint16) (*Entry, error) {
+	for {
+		entry, err := r.Read()
+		if err == io.EOF {
+			return nil, io.EOF
+		} else if err != nil {
+			return nil, err
+		}
+		if entry.Type == typ {
+			return entry, nil
+		}
+	}
+}
+
+// FindAll returns all entries with the matching type.
+func (r *Reader) FindAll(typ uint16) ([]*Entry, error) {
+	all := make([]*Entry, 0)
+	for {
+		entry, err := r.Find(typ)
+		if err == io.EOF {
+			return all, io.EOF
+		} else if err != nil {
+			return all, err
+		}
+		all = append(all, entry)
+	}
+}
+
+// Close closes the underlying io.ReadCloser.
+func (r *Reader) Close() error {
+	return r.r.Close()
 }
