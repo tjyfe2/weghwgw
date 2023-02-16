@@ -51,6 +51,11 @@ var (
 		Usage: "network name associated with Era files",
 		Value: "mainnet",
 	}
+	batchSizeFlag = &cli.IntFlag{
+		Name:  "batchSize",
+		Usage: "number blocks per era batch",
+		Value: era.MaxEraBatchSize,
+	}
 	txsFlag = &cli.BoolFlag{
 		Name:  "txs",
 		Usage: "print full transaction values",
@@ -74,9 +79,10 @@ var (
 		Action:    info,
 	}
 	verifyCommand = &cli.Command{
-		Name:   "verify",
-		Usage:  "verifies each epoch",
-		Action: verify,
+		Name:      "verify",
+		ArgsUsage: "<expected>",
+		Usage:     "verifies each epoch against expected accumulator root",
+		Action:    verify,
 	}
 	convertCommand = &cli.Command{
 		Name:   "convert",
@@ -95,6 +101,7 @@ func init() {
 	app.Flags = []cli.Flag{
 		dirFlag,
 		networkFlag,
+		batchSizeFlag,
 	}
 }
 
@@ -112,7 +119,7 @@ func block(ctx *cli.Context) error {
 		return fmt.Errorf("invalid block number: %w", err)
 	}
 
-	r, err := openEra(ctx, num/uint64(era.MaxEraBatchSize))
+	r, err := openEra(ctx, num/uint64(ctx.Int(batchSizeFlag.Name)))
 	defer r.Close()
 
 	// Read block with number.
@@ -250,7 +257,7 @@ func verify(ctx *cli.Context) error {
 			if err == io.EOF {
 				break
 			} else if err != nil {
-				return fmt.Errorf("error reading block %d: %w", i*era.MaxEraBatchSize+j, err)
+				return fmt.Errorf("error reading block %d: %w", i*ctx.Int(batchSizeFlag.Name)+j, err)
 			}
 			// Calculate receipt root from receipt list and check
 			// value against block.
@@ -329,7 +336,7 @@ func recompute(ctx *cli.Context) error {
 				if err == io.EOF {
 					break
 				} else if err != nil {
-					return fmt.Errorf("error reading block %d: %w", i*era.MaxEraBatchSize+j, err)
+					return fmt.Errorf("error reading block %d: %w", i*ctx.Int(batchSizeFlag.Name)+j, err)
 				}
 				td.Add(td, b.Difficulty())
 				blocks = append(blocks, b)
