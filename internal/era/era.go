@@ -297,7 +297,7 @@ func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
 
 // ReadBlockAndReceipts reads the block number n and associated receipts from
 // the Era archive.
-
+//
 // The method returns error if the Era file is malformed, the request is
 // out-of-bounds, as determined by the block index, or if the block number at
 // the calculated offset doesn't match the requested.
