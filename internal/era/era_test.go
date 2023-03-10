@@ -77,7 +77,7 @@ func TestEraBuilder(t *testing.T) {
 	)
 
 	// Write blocks to Era.
-	head := chain.CurrentBlock().NumberU64()
+	head := chain.CurrentBlock().Number.Uint64()
 	for i := uint64(0); i < head; i++ {
 		var (
 			block    = chain.GetBlockByNumber(i)

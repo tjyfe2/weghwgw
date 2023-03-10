@@ -296,9 +296,11 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 	return nil
 }
 
+// ExportHistory exports blockchain history into the specified directory,
+// following the Era format.
 func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) error {
 	log.Info("Exporting blockchain history", "dir", dir)
-	if head := bc.CurrentBlock().NumberU64(); head < last {
+	if head := bc.CurrentBlock().Number.Uint64(); head < last {
 		log.Warn("Last block beyond head, setting last = head", "head", head, "last", last)
 		last = head
 	}
@@ -337,9 +339,6 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 				td := bc.GetTd(block.Hash(), block.NumberU64())
 				if td == nil {
 					return fmt.Errorf("export failed on #%d: total difficulty not found", nr)
-				}
-				if receipts == nil {
-					return fmt.Errorf("export failed on #%d: receipts not found", nr)
 				}
 				if err := w.Add(block, receipts, td); err != nil {
 					return err
