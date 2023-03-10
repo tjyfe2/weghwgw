@@ -249,15 +249,6 @@ func NewReader(r io.ReadSeekCloser) *Reader {
 	return &Reader{r: r}
 }
 
-// Open opens an Era file and returns a Reader to it.
-// func Open(name string) (*Reader, error) {
-//         f, err := os.Open(name)
-//         if err != nil {
-//                 return nil, fmt.Errorf("error opening era file %s: %w", name, err)
-//         }
-//         return NewReader(f), nil
-// }
-
 // Read reads one (block, receipts) tuple from an Era archive.
 func (r *Reader) Read() (*types.Block, *types.Receipts, error) {
 	if r.offset == nil {
