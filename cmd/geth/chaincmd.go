@@ -380,10 +380,14 @@ func exportHistory(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 
-	stack, _ := makeConfigNode(ctx)
+	stack, config := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, _ := utils.MakeChain(ctx, stack, true)
+	db, err := rawdb.NewChainFreezer(stack.ResolveAncient("chaindata", config.Eth.DatabaseFreezer), "eth/db/chaindata/", true)
+	if err != nil {
+		return err
+	}
+
 	start := time.Now()
 
 	first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
@@ -395,10 +399,7 @@ func exportHistory(ctx *cli.Context) error {
 	if first < 0 || last < 0 || step < 0 {
 		utils.Fatalf("Export error: block number and step must be greater than 0\n")
 	}
-	if head := chain.CurrentFastBlock(); uint64(last) > head.NumberU64() {
-		utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.NumberU64())
-	}
-	err := utils.ExportHistory(chain, ctx.Args().First(), uint64(first), uint64(last), uint64(step))
+	err = utils.ExportHistory(db, ctx.Args().First(), uint64(first), uint64(last), uint64(step))
 	if err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}

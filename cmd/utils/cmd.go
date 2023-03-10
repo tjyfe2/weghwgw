@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"os/signal"
 	"path"
@@ -42,8 +43,8 @@ import (
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/urfave/cli/v2"
 )
 
@@ -290,16 +291,23 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 	return nil
 }
 
-func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) error {
+func ExportHistory(db ethdb.AncientReader, dir string, first, last, step uint64) error {
 	log.Info("Exporting blockchain history", "dir", dir)
-	if head := bc.CurrentBlock().NumberU64(); head < last {
-		log.Warn("Last block beyond head, setting last = head", "head", head, "last", last)
-		last = head
+	frozen, err := db.Ancients()
+	if err != nil {
+		return err
 	}
-	network := "unknown"
-	if name, ok := params.NetworkNames[bc.Config().ChainID.String()]; ok {
-		network = name
+	if first > frozen {
+		return fmt.Errorf("First block beyond last frozen block (frozen %d, first %d)", frozen, first)
 	}
+	if last > frozen {
+		log.Warn("Last block beyond last frozen block, setting last = frozen", "frozen", frozen, "last", last)
+		last = frozen
+	}
+	network := "mainnet"
+	// if name, ok := params.NetworkNames[db.Config().ChainID.String()]; ok {
+	//         network = name
+	// }
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 		return fmt.Errorf("error creating output directory: %w", err)
 	}
@@ -318,24 +326,61 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 			defer fh.Close()
 
 			w := era.NewBuilder(fh)
-			for j := uint64(0); j < step && j <= last-i; j++ {
+			for j := uint64(1); j < step && j <= last-i; j++ {
 				nr := i + j
-				block := bc.GetBlockByNumber(nr)
-				if block == nil {
-					return fmt.Errorf("export failed on #%d: not found", nr)
+
+				var (
+					header   types.Header
+					body     types.Body
+					receipts types.Receipts
+					td       big.Int
+				)
+
+				err := db.ReadAncients(func(op ethdb.AncientReaderOp) error {
+					// header
+					data, _ := db.Ancient(rawdb.ChainFreezerHeaderTable, nr)
+					if len(data) == 0 {
+						return fmt.Errorf("export failed on #%d: not found", nr)
+					}
+					if err := rlp.DecodeBytes(data, &header); err != nil {
+						return fmt.Errorf("error decoding header %d: %w, %v", nr, err, data)
+					}
+
+					// body
+					data, _ = db.Ancient(rawdb.ChainFreezerBodiesTable, nr)
+					if len(data) == 0 {
+						return fmt.Errorf("export failed on #%d: not found", nr)
+					}
+					if err := rlp.DecodeBytes(data, &header); err != nil {
+						return fmt.Errorf("error decoding body %d: %w", nr, err)
+					}
+
+					// receipts
+					data, _ = db.Ancient(rawdb.ChainFreezerReceiptTable, nr)
+					if len(data) == 0 {
+						return fmt.Errorf("export failed on #%d: receipts not found", nr)
+					}
+					if err := rlp.DecodeBytes(data, &receipts); err != nil {
+						return fmt.Errorf("error decoding receipts %d: %w", nr, err)
+					}
+
+					// total difficulty
+					data, _ = db.Ancient(rawdb.ChainFreezerDifficultyTable, nr)
+					if len(data) == 0 {
+						return fmt.Errorf("export failed on #%d: total difficulty not found", nr)
+					}
+					if err := rlp.DecodeBytes(data, &td); err != nil {
+						return fmt.Errorf("error decoding total difficulty %d: %w", nr, err)
+					}
+
+					return nil
+				})
+				if err != nil {
+					return err
 				}
-				receipts := bc.GetReceiptsByHash(block.Hash())
-				if receipts == nil {
-					return fmt.Errorf("export failed on #%d: receipts not found", nr)
-				}
-				td := bc.GetTd(block.Hash(), block.NumberU64())
-				if td == nil {
-					return fmt.Errorf("export failed on #%d: total difficulty not found", nr)
-				}
-				if receipts == nil {
-					return fmt.Errorf("export failed on #%d: receipts not found", nr)
-				}
-				if err := w.Add(block, receipts, td); err != nil {
+
+				block := types.NewBlock(&header, body.Transactions, body.Uncles, receipts, trie.NewStackTrie(nil))
+				if err := w.Add(block, receipts, &td); err != nil {
 					return err
 				}
 			}
