@@ -35,8 +35,9 @@ var (
 	TypeVersion           uint16 = 0x3265
 	TypeCompressedBlock   uint16 = 0x03
 	TypeCompressedReceipt uint16 = 0x04
-	TypeAccumulator       uint16 = 0x05
-	TypeTotalDifficulty   uint16 = 0x06
+	TypeHashes            uint16 = 0x05
+	TypeAccumulator       uint16 = 0x06
+	TypeTotalDifficulty   uint16 = 0x07
 	TypeBlockIndex        uint16 = 0x3266
 
 	MaxEraBatchSize = 8192
@@ -82,8 +83,9 @@ func ComputeAccumulator(hashes []common.Hash, tds []*big.Int) (common.Hash, erro
 //	Version            = { type: [0x65, 0x32], data: nil }
 //	CompressedBlock    = { type: [0x03, 0x00], data: snappyFramed(rlp(block)) }
 //	CompressedReceipts = { type: [0x04, 0x00], data: snappyFramed(rlp(receipts)) }
-//	Accumulator        = { type: [0x05, 0x00], data: hash_tree_root(blockHashes, 8192) }
-//	StartTD            = { type: [0x06, 0x00], data: uint256(startingTotalDifficulty) }
+//	Hashes             = { type: [0x05, 0x00], data: hash1 | hash2 | ... | hashN }
+//	Accumulator        = { type: [0x06, 0x00], data: hash_tree_root(blockHashes, 8192) }
+//	StartTD            = { type: [0x07, 0x00], data: uint256(startingTotalDifficulty) }
 //	BlockIndex         = { type: [0x32, 0x66], data: block-index }
 //
 // BlockIndex stores relative offsets to each compressed block entry. The
@@ -181,6 +183,16 @@ func (b *Builder) Finalize() error {
 	if b.startNum == nil {
 		return fmt.Errorf("finalize called on empty builder")
 	}
+
+	// Write hashes.
+	hashes := make([]byte, 32*len(b.hashes))
+	for i, h := range b.hashes {
+		copy(hashes[i:i+32], h.Bytes())
+	}
+	if _, err := b.w.Write(TypeBlockIndex, hashes); err != nil {
+		return fmt.Errorf("error writing hashes: %w", err)
+	}
+
 	// Compute accumulator root and write entry.
 	root, err := ComputeAccumulator(b.hashes, b.tds)
 	if err != nil {
@@ -308,6 +320,20 @@ func (r *Reader) ReadBlockAndReceipts(n uint64) (*types.Block, *types.Receipts, 
 	}
 	receipts, err := readReceipts(r)
 	return block, receipts, err
+}
+
+// Hashes reads the hashes entry in the Era file.
+func (r *Reader) Hashes() ([]common.Hash, error) {
+	_, err := r.seek(0, io.SeekStart)
+	entry, err := e2store.NewReader(r.r).Find(TypeHashes)
+	if err != nil {
+		return nil, err
+	}
+	var hashes []common.Hash
+	for i := 0; i < len(entry.Value)/32; i++ {
+		hashes = append(hashes, common.BytesToHash(entry.Value[i*32:(i+1)*32]))
+	}
+	return hashes, nil
 }
 
 // Accumulator reads the accumulator entry in the Era file.
