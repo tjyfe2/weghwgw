@@ -18,7 +18,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -83,11 +82,6 @@ var (
 		ArgsUsage: "<expected>",
 		Usage:     "verifies each epoch against expected accumulator root",
 		Action:    verify,
-	}
-	convertCommand = &cli.Command{
-		Name:   "convert",
-		Usage:  "convert to new format",
-		Action: recompute,
 	}
 )
 
@@ -303,69 +297,4 @@ func readHashes(f string) ([]common.Hash, error) {
 		r[i] = common.HexToHash(s[i])
 	}
 	return r, nil
-}
-
-// recompute will read each Era file and rewrite it with updated rules (if any).
-func recompute(ctx *cli.Context) error {
-	var (
-		dir     = ctx.String(dirFlag.Name)
-		network = ctx.String(networkFlag.Name)
-		td      = big.NewInt(0)
-	)
-	// iterate over all consecutively available epochs, starting at 0.
-	for i := 0; ; i++ {
-		fmt.Println("epoch", i)
-		fn := func() error {
-			name := path.Join(dir, era.Filename(i, network))
-			f, err := os.OpenFile(name, os.O_RDWR, os.ModePerm)
-			if errors.Is(os.ErrNotExist, err) {
-				return fmt.Errorf("not found")
-			} else if err != nil {
-				return fmt.Errorf("error opening era file %s: %w", name, err)
-			}
-			defer f.Close()
-			var (
-				r        = era.NewReader(f)
-				tds      = make([]*big.Int, 0)
-				blocks   = make([]*types.Block, 0)
-				receipts = make([]types.Receipts, 0)
-			)
-			// Read each block and store in memory.
-			for j := 0; ; j++ {
-				b, r, err := r.Read()
-				if err == io.EOF {
-					break
-				} else if err != nil {
-					return fmt.Errorf("error reading block %d: %w", i*ctx.Int(batchSizeFlag.Name)+j, err)
-				}
-				td.Add(td, b.Difficulty())
-				blocks = append(blocks, b)
-				receipts = append(receipts, *r)
-				tds = append(tds, new(big.Int).Set(td))
-			}
-
-			// Delete open Era.
-			f.Truncate(0)
-			f.Seek(0, io.SeekStart)
-
-			// Rewrite Era.
-			b := era.NewBuilder(f)
-			for i := range blocks {
-				err := b.Add(blocks[i], receipts[i], tds[i])
-				if err != nil {
-					return err
-				}
-			}
-			if err := b.Finalize(); err != nil {
-				return err
-			}
-			return nil
-		}
-		if err := fn(); err != nil && err.Error() == "not found" {
-			fmt.Printf("finished at epoch %d\n", i-1)
-			return nil
-		} else if err != nil {
-			return err
-		}
-	}
 }
