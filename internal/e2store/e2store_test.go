@@ -55,14 +55,14 @@ func TestEncode(t *testing.T) {
 				t.Fatalf("test %d: encoding error: %v", i, err)
 			}
 		}
-		if want, got := common.Hex2Bytes(tt.want), b.Bytes(); bytes.Compare(want, got) != 0 {
+		if want, got := common.Hex2Bytes(tt.want), b.Bytes(); !bytes.Equal(want, got) {
 			t.Fatalf("test %d: encoding mismatch (want %s, got %s", i, common.Bytes2Hex(want), common.Bytes2Hex(got))
 		}
 		r := NewReader(io.NopCloser(bytes.NewBuffer(b.Bytes())))
 		for _, want := range tt.entries {
 			if got, err := r.Read(); err != nil {
 				t.Fatalf("test %d: decoding error: %v", i, err)
-			} else if got.Type != want.Type || bytes.Compare(got.Value, want.Value) != 0 {
+			} else if got.Type != want.Type || !bytes.Equal(got.Value, want.Value) {
 				t.Fatalf("test %d: decoded entry does not match (want %v, got %v)", i, want, got)
 			}
 		}
@@ -110,7 +110,7 @@ func TestDecode(t *testing.T) {
 		for _, want := range tt.want {
 			if got, err := r.Read(); err != nil {
 				t.Fatalf("test %d: decoding error: %v", i, err)
-			} else if got.Type != want.Type || bytes.Compare(got.Value, want.Value) != 0 {
+			} else if got.Type != want.Type || !bytes.Equal(got.Value, want.Value) {
 				t.Fatalf("test %d: decoded entry does not match (want %v, got %v)", i, want, got)
 			}
 		}

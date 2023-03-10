@@ -90,7 +90,6 @@ func init() {
 		blockCommand,
 		infoCommand,
 		verifyCommand,
-		convertCommand,
 	}
 	app.Flags = []cli.Flag{
 		dirFlag,
@@ -114,6 +113,9 @@ func block(ctx *cli.Context) error {
 	}
 
 	r, err := openEra(ctx, num/uint64(ctx.Int(batchSizeFlag.Name)))
+	if err != nil {
+		return fmt.Errorf("error opening era: %w", err)
+	}
 	defer r.Close()
 
 	// Read block with number.
