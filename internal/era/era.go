@@ -147,10 +147,13 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) 
 	}
 	var (
 		buf = bytes.NewBuffer(nil)
-		s   = snappy.NewWriter(buf)
+		s   = snappy.NewBufferedWriter(buf)
 	)
 	if _, err := s.Write(encBlock); err != nil {
 		return fmt.Errorf("error snappy encoding block: %w", err)
+	}
+	if err := s.Flush(); err != nil {
+		return fmt.Errorf("error flushing snappy encoding block: %w", err)
 	}
 	_, err = b.w.Write(TypeCompressedBlock, buf.Bytes())
 	if err != nil {
@@ -166,6 +169,9 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) 
 	s.Reset(buf)
 	if _, err := s.Write(encReceipts); err != nil {
 		return fmt.Errorf("error snappy encoding receipts: %w", err)
+	}
+	if err := s.Flush(); err != nil {
+		return fmt.Errorf("error flushing snappy encoding block: %w", err)
 	}
 	_, err = b.w.Write(TypeCompressedReceipt, buf.Bytes())
 	if err != nil {
@@ -313,6 +319,9 @@ func (r *Reader) ReadBlockAndReceipts(n uint64) (*types.Block, *types.Receipts, 
 // Accumulator reads the accumulator entry in the Era file.
 func (r *Reader) Accumulator() (common.Hash, error) {
 	_, err := r.seek(0, io.SeekStart)
+	if err != nil {
+		return common.Hash{}, err
+	}
 	entry, err := e2store.NewReader(r.r).Find(TypeAccumulator)
 	if err != nil {
 		return common.Hash{}, err
@@ -323,6 +332,9 @@ func (r *Reader) Accumulator() (common.Hash, error) {
 // TotalDifficulty reads the total difficulty entry in the Era file.
 func (r *Reader) TotalDifficulty() (*big.Int, error) {
 	_, err := r.seek(0, io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
 	entry, err := e2store.NewReader(r.r).Find(TypeTotalDifficulty)
 	if err != nil {
 		return nil, err

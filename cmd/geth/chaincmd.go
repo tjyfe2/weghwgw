@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -122,7 +123,7 @@ be gzipped.`,
 		Action:    exportHistory,
 		Name:      "export-history",
 		Usage:     "Export blockchain history to Era archives",
-		ArgsUsage: "<dir> <first> <last> <step>",
+		ArgsUsage: "<dir> <first> <last>",
 		Flags:     flags.Merge(utils.DatabasePathFlags),
 		Description: `
 The export-history command will export blocks and their corresponding receipts
@@ -388,17 +389,16 @@ func exportHistory(ctx *cli.Context) error {
 
 	first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
 	last, lerr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
-	step, serr := strconv.ParseInt(ctx.Args().Get(3), 10, 64)
-	if ferr != nil || lerr != nil || serr != nil {
-		utils.Fatalf("Export error in parsing parameters: block number or step not an integer\n")
+	if ferr != nil || lerr != nil {
+		utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
 	}
-	if first < 0 || last < 0 || step < 0 {
-		utils.Fatalf("Export error: block number and step must be greater than 0\n")
+	if first < 0 || last < 0 {
+		utils.Fatalf("Export error: block number must be greater than 0\n")
 	}
 	if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
 		utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
 	}
-	err := utils.ExportHistory(chain, ctx.Args().First(), uint64(first), uint64(last), uint64(step))
+	err := utils.ExportHistory(chain, ctx.Args().First(), uint64(first), uint64(last), uint64(era.MaxEraBatchSize))
 	if err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
