@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/golang/snappy"
 )
@@ -118,14 +119,28 @@ func NewBuilder(w io.WriteSeeker) *Builder {
 // Add writes a compressed block entry and compressed receipts entry to the
 // underlying e2store file.
 func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) error {
+	eb, err := rlp.EncodeToBytes(block)
+	if err != nil {
+		return err
+	}
+	er, err := rlp.EncodeToBytes(receipts)
+	if err != nil {
+		return err
+	}
+	return b.AddRLP(eb, er, block.NumberU64(), block.Hash(), td, block.Difficulty())
+}
+
+// AddRLP writes a compressed block entry and compressed receipts entry to the
+// underlying e2store file.
+func (b *Builder) AddRLP(block, receipts []byte, number uint64, hash common.Hash, td, difficulty *big.Int) error {
 	// Write Era version entry before first block.
 	if b.startNum == nil {
 		if err := writeVersion(b.w); err != nil {
 			return err
 		}
-		n := block.NumberU64()
+		n := number
 		b.startNum = &n
-		b.startTd = new(big.Int).Sub(td, block.Difficulty())
+		b.startTd = new(big.Int).Sub(td, difficulty)
 	}
 	if len(b.indexes) >= MaxEraBatchSize {
 		return fmt.Errorf("exceeds maximum batch size of %d", MaxEraBatchSize)
@@ -137,19 +152,15 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) 
 		return err
 	}
 	b.indexes = append(b.indexes, uint64(offset))
-	b.hashes = append(b.hashes, block.Hash())
+	b.hashes = append(b.hashes, hash)
 	b.tds = append(b.tds, td)
 
 	// Write block.
-	encBlock, err := rlp.EncodeToBytes(block)
-	if err != nil {
-		return err
-	}
 	var (
 		buf = bytes.NewBuffer(nil)
 		s   = snappy.NewBufferedWriter(buf)
 	)
-	if _, err := s.Write(encBlock); err != nil {
+	if _, err := s.Write(block); err != nil {
 		return fmt.Errorf("error snappy encoding block: %w", err)
 	}
 	if err := s.Flush(); err != nil {
@@ -161,13 +172,9 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) 
 	}
 
 	// Write receipts.
-	encReceipts, err := rlp.EncodeToBytes(receipts)
-	if err != nil {
-		return err
-	}
 	buf.Reset()
 	s.Reset(buf)
-	if _, err := s.Write(encReceipts); err != nil {
+	if _, err := s.Write(receipts); err != nil {
 		return fmt.Errorf("error snappy encoding receipts: %w", err)
 	}
 	if err := s.Flush(); err != nil {
@@ -352,6 +359,64 @@ func (r *Reader) Start() (uint64, error) {
 func (r *Reader) Count() (uint64, error) {
 	m, err := readMetadata(r)
 	return m.count, err
+}
+
+func (r *Reader) Verify() error {
+	var (
+		err    error
+		start  uint64
+		want   common.Hash
+		td     *big.Int
+		tds    = make([]*big.Int, 0)
+		hashes = make([]common.Hash, 0)
+	)
+	if start, err = r.Start(); err != nil {
+		return fmt.Errorf("error reading start block")
+	}
+	if want, err = r.Accumulator(); err != nil {
+		return fmt.Errorf("error reading accumulator: %w", err)
+	}
+	if td, err = r.TotalDifficulty(); err != nil {
+		return fmt.Errorf("error reading total difficulty: %w", err)
+	}
+	// Starting at epoch 0, iterate through all available Era files
+	// and check the following:
+	//   * the block index is constructed correctly
+	//   * the starting total difficulty value is correct
+	//   * the accumulator is correct by recomputing it locally,
+	//     which verfies the blocks are all correct (via hash)
+	//   * the receipts root matches the value in the block
+	for j := 0; ; j++ {
+		// read() walks the block index, so we're able to
+		// implicitly verify it.
+		block, receipts, err := r.Read()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return fmt.Errorf("error reading block %d: %w", start+uint64(j), err)
+		}
+		tr := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
+		if tr != block.TxHash() {
+			return fmt.Errorf("tx root in block %d mismatch: want %s, got %s", block.NumberU64(), block.TxHash(), tr)
+		}
+		// Calculate receipt root from receipt list and check
+		// value against block.
+		rr := types.DeriveSha(receipts, trie.NewStackTrie(nil))
+		if rr != block.ReceiptHash() {
+			return fmt.Errorf("receipt root in block %d mismatch: want %s, got %s", block.NumberU64(), block.ReceiptHash(), rr)
+		}
+		hashes = append(hashes, block.Hash())
+		td.Add(td, block.Difficulty())
+		tds = append(tds, new(big.Int).Set(td))
+	}
+	got, err := ComputeAccumulator(hashes, tds)
+	if err != nil {
+		return fmt.Errorf("error computing accumulator: %w", err)
+	}
+	if got != want {
+		return fmt.Errorf("expected accumulator root does not match calculated: got %s, want %s", got, want)
+	}
+	return nil
 }
 
 // Close implements a closer.

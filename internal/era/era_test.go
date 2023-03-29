@@ -18,6 +18,7 @@ package era
 
 import (
 	"math/big"
+	"math/rand"
 	"os"
 	"testing"
 
@@ -31,32 +32,49 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-func makeTestChain() *core.BlockChain {
+func makeTestChain(blocks, maxTx, minTx int) *core.BlockChain {
 	var (
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		address = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{
-			Config: params.TestChainConfig,
-			Alloc:  core.GenesisAlloc{address: {Balance: big.NewInt(1000000000000000000)}},
+			Config:   params.TestChainConfig,
+			GasLimit: 30_000_000,
+			Alloc:    core.GenesisAlloc{address: {Balance: big.NewInt(1000000000000000000)}},
 		}
 		signer = types.LatestSigner(genesis.Config)
 	)
-	db, b, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 128, func(i int, g *core.BlockGen) {
+	db, b, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), blocks, func(i int, g *core.BlockGen) {
 		if i == 0 {
 			return
 		}
-		tx, _ := types.SignNewTx(key, signer, &types.DynamicFeeTx{
-			ChainID:    genesis.Config.ChainID,
-			Nonce:      uint64(i - 1),
-			GasTipCap:  common.Big0,
-			GasFeeCap:  g.PrevBlock(0).BaseFee(),
-			Gas:        50000,
-			To:         &common.Address{0xaa},
-			Value:      big.NewInt(int64(i)),
-			Data:       nil,
-			AccessList: nil,
-		})
-		g.AddTx(tx)
+		var (
+			count = minTx + (int(rand.Uint64()) % (maxTx - minTx + 1))
+			sum   = uint64(0)
+		)
+
+		for j := 0; j < count; j++ {
+			data := make([]byte, 512)
+			if _, err := rand.Read(data); err != nil {
+				panic(err)
+			}
+			gas, _ := core.IntrinsicGas(data, nil, false, true, true, true)
+			if sum > g.PrevBlock(int(g.Number().Int64())-2).GasLimit() {
+				break
+			}
+			tx, _ := types.SignNewTx(key, signer, &types.DynamicFeeTx{
+				ChainID:    genesis.Config.ChainID,
+				Nonce:      uint64(g.TxNonce(address)),
+				GasTipCap:  common.Big0,
+				GasFeeCap:  g.PrevBlock(0).BaseFee(),
+				Gas:        gas,
+				To:         &common.Address{0xaa},
+				Value:      big.NewInt(int64(i)),
+				Data:       data,
+				AccessList: nil,
+			})
+			sum += gas
+			g.AddTx(tx)
+		}
 	})
 	chain, _ := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	chain.InsertChain(b)
@@ -72,7 +90,7 @@ func TestEraBuilder(t *testing.T) {
 	defer f.Close()
 
 	var (
-		chain   = makeTestChain()
+		chain   = makeTestChain(128, 1, 1)
 		builder = NewBuilder(f)
 	)
 

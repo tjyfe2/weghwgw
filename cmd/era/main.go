@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/big"
 	"os"
 	"path"
@@ -28,12 +27,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/urfave/cli/v2"
 )
 
@@ -205,9 +202,8 @@ func verify(ctx *cli.Context) error {
 	}
 
 	var (
-		dir     = ctx.String(dirFlag.Name)
-		network = ctx.String(networkFlag.Name)
-
+		dir      = ctx.String(dirFlag.Name)
+		network  = ctx.String(networkFlag.Name)
 		start    = time.Now()
 		reported = time.Now()
 	)
@@ -220,65 +216,28 @@ func verify(ctx *cli.Context) error {
 			return fmt.Errorf("error opening era file %s: %w", name, err)
 		}
 		defer f.Close()
+
 		r := era.NewReader(f)
 
-		var (
-			got    common.Hash
-			td     *big.Int
-			hashes = make([]common.Hash, 0)
-			tds    = make([]*big.Int, 0)
-		)
-		if got, err = r.Accumulator(); err != nil {
-			return fmt.Errorf("error reading accumulator: %w", err)
-		}
-		if td, err = r.TotalDifficulty(); err != nil {
-			return fmt.Errorf("error reading total difficulty: %w", err)
-		}
-		// Verify that the embedded root matches expected
-		if got != want {
-			return fmt.Errorf("listed accumulator root in epoch %d does not match expected", i)
+		// Read accumulator and check against expected.
+		if got, err := r.Accumulator(); err != nil {
+			return fmt.Errorf("error retrieving accumulator for %s: %w", name, err)
+		} else if got != want {
+			return fmt.Errorf("invalid root %s: got %s, want %s", name, got, want)
 		}
 
-		// Starting at epoch 0, iterate through all available Era files
-		// and check the following:
-		//   * the block index is constructed correctly
-		//   * the starting total difficulty value is correct
-		//   * the accumulator is correct by recomputing it locally,
-		//     which verfies the blocks are all correct (via hash)
-		//   * the receipts root matches the value in the block
-		for j := 0; ; j++ {
-			// read() walks the block index, so we're able to
-			// implicitly verify it.
-			block, receipts, err := r.Read()
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return fmt.Errorf("error reading block %d: %w", i*ctx.Int(batchSizeFlag.Name)+j, err)
-			}
-			// Calculate receipt root from receipt list and check
-			// value against block.
-			rr := types.DeriveSha(receipts, trie.NewStackTrie(nil))
-			if rr != block.ReceiptHash() {
-				return fmt.Errorf("receipt root in block %d mismatch: want %s, got %s", block.NumberU64(), block.ReceiptHash(), rr)
-			}
-			hashes = append(hashes, block.Hash())
-			td.Add(td, block.Difficulty())
-			tds = append(tds, new(big.Int).Set(td))
+		// Recompute accumulator.
+		if err := r.Verify(); err != nil {
+			return fmt.Errorf("error verify era file %s: %w", name, err)
+		}
 
-			// Give the user some feedback that something is happening.
-			if time.Since(reported) >= 8*time.Second {
-				fmt.Printf("Verifying Era files \t\t verified=%d,\t elapsed=%s\n", i, common.PrettyDuration(time.Since(start)))
-				reported = time.Now()
-			}
-		}
-		got, err = era.ComputeAccumulator(hashes, tds)
-		if err != nil {
-			return fmt.Errorf("error computing accumulator for epoch %d: %w", i, err)
-		}
-		if got != want {
-			return fmt.Errorf("expected accumulator root does not match calculated: got %s, want %s", got, want)
+		// Give the user some feedback that something is happening.
+		if time.Since(reported) >= 8*time.Second {
+			fmt.Printf("Verifying Era files \t\t verified=%d,\t elapsed=%s\n", i, common.PrettyDuration(time.Since(start)))
+			reported = time.Now()
 		}
 	}
+
 	return nil
 }
 
