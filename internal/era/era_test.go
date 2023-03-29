@@ -17,6 +17,8 @@
 package era
 
 import (
+	"fmt"
+	"io"
 	"math/big"
 	"math/rand"
 	"os"
@@ -130,4 +132,67 @@ func TestEraBuilder(t *testing.T) {
 			t.Fatalf("receipt root %d mismatch: want %s, got %s", want.NumberU64(), want.ReceiptHash(), got)
 		}
 	}
+}
+
+func makeEra() (*os.File, error) {
+	f, err := os.CreateTemp("", "era-test")
+	if err != nil {
+		return nil, fmt.Errorf("error creating temp file: %w", err)
+	}
+	var (
+		chain   = makeTestChain(128, 512, 128)
+		builder = NewBuilder(f)
+	)
+	head := chain.CurrentBlock().Number.Uint64()
+	for i := uint64(0); i < head; i++ {
+		var (
+			block    = chain.GetBlockByNumber(i)
+			receipts = chain.GetReceiptsByHash(block.Hash())
+			td       = chain.GetTd(block.Hash(), i)
+		)
+		if err := builder.Add(block, receipts, td); err != nil {
+			return nil, fmt.Errorf("error adding entry: %w", err)
+		}
+	}
+	if err := builder.Finalize(); err != nil {
+		return nil, fmt.Errorf("error finalizing era: %v", err)
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("seek failed")
+	}
+	return f, nil
+}
+
+func BenchmarkEraVerify(b *testing.B) {
+	f, err := makeEra()
+	if err != nil {
+		f.Close()
+		b.Fatalf("%v", err)
+	}
+	defer f.Close()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r := NewReader(f)
+		if err := r.Verify(); err != nil {
+			b.Fatalf("error verifying era: %v", err)
+		}
+	}
+
+}
+
+func BenchmarkEraVerifyHash(b *testing.B) {
+	f, err := makeEra()
+	if err != nil {
+		f.Close()
+		b.Fatalf("%v", err)
+	}
+	defer f.Close()
+	data, _ := io.ReadAll(f)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		crypto.Keccak256(data)
+	}
+
 }
