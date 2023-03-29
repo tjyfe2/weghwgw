@@ -308,6 +308,60 @@ func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
 	return b, err
 }
 
+func (r *Reader) ReadAll() (types.Blocks, []*types.Receipts, error) {
+	m, err := readMetadata(r)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error reading index: %w", err)
+	}
+
+	// Seek to beginning of block entry.
+	offset, err := readOffset(r, m, m.start)
+	if err != nil {
+		return nil, nil, err
+	}
+	if _, err := r.r.Seek(offset, io.SeekCurrent); err != nil {
+		return nil, nil, err
+	}
+	er := e2store.NewReader(r.r)
+
+	var (
+		blocks   []*types.Block
+		receipts []*types.Receipts
+	)
+	for {
+		entry, err := er.Read()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, nil, err
+		}
+		if entry.Type == TypeCompressedBlock {
+			b, err := io.ReadAll(snappy.NewReader(bytes.NewReader(entry.Value)))
+			if err != nil {
+				return nil, nil, fmt.Errorf("error decoding snappy: %w", err)
+			}
+			var block types.Block
+			if err := rlp.DecodeBytes(b, &block); err != nil {
+				return nil, nil, fmt.Errorf("error decoding block: %w", err)
+			}
+			blocks = append(blocks, &block)
+		} else if entry.Type == TypeCompressedReceipt {
+			b, err := io.ReadAll(snappy.NewReader(bytes.NewReader(entry.Value)))
+			if err != nil {
+				return nil, nil, fmt.Errorf("error decoding snappy: %w", err)
+			}
+			var r types.Receipts
+			if err := rlp.DecodeBytes(b, &r); err != nil {
+				return nil, nil, fmt.Errorf("error decoding block: %w", err)
+			}
+			receipts = append(receipts, &r)
+		} else {
+			break
+		}
+	}
+	return blocks, receipts, nil
+}
+
 // ReadBlockAndReceipts reads the block number n and associated receipts from
 // the Era archive.
 
@@ -364,20 +418,20 @@ func (r *Reader) Count() (uint64, error) {
 func (r *Reader) Verify() error {
 	var (
 		err    error
-		start  uint64
 		want   common.Hash
 		td     *big.Int
 		tds    = make([]*big.Int, 0)
 		hashes = make([]common.Hash, 0)
 	)
-	if start, err = r.Start(); err != nil {
-		return fmt.Errorf("error reading start block")
-	}
 	if want, err = r.Accumulator(); err != nil {
 		return fmt.Errorf("error reading accumulator: %w", err)
 	}
 	if td, err = r.TotalDifficulty(); err != nil {
 		return fmt.Errorf("error reading total difficulty: %w", err)
+	}
+	blocks, receipts, err := r.ReadAll()
+	if err != nil {
+		return fmt.Errorf("error reading blocks and receipts: %w", err)
 	}
 	// Starting at epoch 0, iterate through all available Era files
 	// and check the following:
@@ -386,14 +440,10 @@ func (r *Reader) Verify() error {
 	//   * the accumulator is correct by recomputing it locally,
 	//     which verfies the blocks are all correct (via hash)
 	//   * the receipts root matches the value in the block
-	for j := 0; ; j++ {
-		// read() walks the block index, so we're able to
-		// implicitly verify it.
-		block, receipts, err := r.Read()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return fmt.Errorf("error reading block %d: %w", start+uint64(j), err)
+	for i, block := range blocks {
+		ur := types.CalcUncleHash(block.Uncles())
+		if ur != block.UncleHash() {
+			return fmt.Errorf("tx root in block %d mismatch: want %s, got %s", block.NumberU64(), block.UncleHash(), ur)
 		}
 		tr := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
 		if tr != block.TxHash() {
@@ -401,7 +451,7 @@ func (r *Reader) Verify() error {
 		}
 		// Calculate receipt root from receipt list and check
 		// value against block.
-		rr := types.DeriveSha(receipts, trie.NewStackTrie(nil))
+		rr := types.DeriveSha(receipts[i], trie.NewStackTrie(nil))
 		if rr != block.ReceiptHash() {
 			return fmt.Errorf("receipt root in block %d mismatch: want %s, got %s", block.NumberU64(), block.ReceiptHash(), rr)
 		}
