@@ -263,7 +263,7 @@ func NewReader(r io.ReadSeekCloser) *Reader {
 }
 
 // Read reads one (block, receipts) tuple from an Era archive.
-func (r *Reader) Read() (*types.Block, *types.Receipts, error) {
+func (r *Reader) Read() (*types.Block, types.Receipts, error) {
 	if r.offset == nil {
 		m, err := readMetadata(r)
 		if err != nil {
@@ -308,67 +308,13 @@ func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
 	return b, err
 }
 
-func (r *Reader) ReadAll() (types.Blocks, []*types.Receipts, error) {
-	m, err := readMetadata(r)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error reading index: %w", err)
-	}
-
-	// Seek to beginning of block entry.
-	offset, err := readOffset(r, m, m.start)
-	if err != nil {
-		return nil, nil, err
-	}
-	if _, err := r.r.Seek(offset, io.SeekCurrent); err != nil {
-		return nil, nil, err
-	}
-	er := e2store.NewReader(r.r)
-
-	var (
-		blocks   []*types.Block
-		receipts []*types.Receipts
-	)
-	for {
-		entry, err := er.Read()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, nil, err
-		}
-		if entry.Type == TypeCompressedBlock {
-			b, err := io.ReadAll(snappy.NewReader(bytes.NewReader(entry.Value)))
-			if err != nil {
-				return nil, nil, fmt.Errorf("error decoding snappy: %w", err)
-			}
-			var block types.Block
-			if err := rlp.DecodeBytes(b, &block); err != nil {
-				return nil, nil, fmt.Errorf("error decoding block: %w", err)
-			}
-			blocks = append(blocks, &block)
-		} else if entry.Type == TypeCompressedReceipt {
-			b, err := io.ReadAll(snappy.NewReader(bytes.NewReader(entry.Value)))
-			if err != nil {
-				return nil, nil, fmt.Errorf("error decoding snappy: %w", err)
-			}
-			var r types.Receipts
-			if err := rlp.DecodeBytes(b, &r); err != nil {
-				return nil, nil, fmt.Errorf("error decoding block: %w", err)
-			}
-			receipts = append(receipts, &r)
-		} else {
-			break
-		}
-	}
-	return blocks, receipts, nil
-}
-
 // ReadBlockAndReceipts reads the block number n and associated receipts from
 // the Era archive.
 
 // The method returns error if the Era file is malformed, the request is
 // out-of-bounds, as determined by the block index, or if the block number at
 // the calculated offset doesn't match the requested.
-func (r *Reader) ReadBlockAndReceipts(n uint64) (*types.Block, *types.Receipts, error) {
+func (r *Reader) ReadBlockAndReceipts(n uint64) (*types.Block, types.Receipts, error) {
 	block, err := r.ReadBlock(n)
 	if err != nil {
 		return nil, nil, err
@@ -429,10 +375,6 @@ func (r *Reader) Verify() error {
 	if td, err = r.TotalDifficulty(); err != nil {
 		return fmt.Errorf("error reading total difficulty: %w", err)
 	}
-	blocks, receipts, err := r.ReadAll()
-	if err != nil {
-		return fmt.Errorf("error reading blocks and receipts: %w", err)
-	}
 	// Starting at epoch 0, iterate through all available Era files
 	// and check the following:
 	//   * the block index is constructed correctly
@@ -440,7 +382,12 @@ func (r *Reader) Verify() error {
 	//   * the accumulator is correct by recomputing it locally,
 	//     which verfies the blocks are all correct (via hash)
 	//   * the receipts root matches the value in the block
-	for i, block := range blocks {
+	for block, receipts, err := r.Read(); ; block, receipts, err = r.Read() {
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return fmt.Errorf("error reading era: %w", err)
+		}
 		ur := types.CalcUncleHash(block.Uncles())
 		if ur != block.UncleHash() {
 			return fmt.Errorf("tx root in block %d mismatch: want %s, got %s", block.NumberU64(), block.UncleHash(), ur)
@@ -451,7 +398,7 @@ func (r *Reader) Verify() error {
 		}
 		// Calculate receipt root from receipt list and check
 		// value against block.
-		rr := types.DeriveSha(receipts[i], trie.NewStackTrie(nil))
+		rr := types.DeriveSha(receipts, trie.NewStackTrie(nil))
 		if rr != block.ReceiptHash() {
 			return fmt.Errorf("receipt root in block %d mismatch: want %s, got %s", block.NumberU64(), block.ReceiptHash(), rr)
 		}
@@ -542,13 +489,12 @@ func readBlockAtOffset(r *Reader, offset int64) (*types.Block, error) {
 	if entry.Type != TypeCompressedBlock {
 		return nil, fmt.Errorf("expected block entry, got %x", entry.Type)
 	}
-	// Read block from snappy framing.
-	b, err := io.ReadAll(snappy.NewReader(bytes.NewReader(entry.Value)))
-	if err != nil {
-		return nil, fmt.Errorf("error decoding snappy: %w", err)
-	}
-	var block types.Block
-	if err := rlp.DecodeBytes(b, &block); err != nil {
+	// Read block.
+	var (
+		block types.Block
+		s     = snappy.NewReader(bytes.NewReader(entry.Value))
+	)
+	if err := rlp.Decode(s, &block); err != nil {
 		return nil, fmt.Errorf("error decoding block: %w", err)
 	}
 	return &block, nil
@@ -559,7 +505,7 @@ func readBlockAtOffset(r *Reader, offset int64) (*types.Block, error) {
 // Note, this method expects the file cursor to be located at the beginning of
 // the e2store entry for the receipts, and so it should generally be called
 // after readBlockAtOffset.
-func readReceipts(r *Reader) (*types.Receipts, error) {
+func readReceipts(r *Reader) (types.Receipts, error) {
 	// Read e2store entry.
 	entry, err := e2store.NewReader(r.r).Read()
 	if err != nil {
@@ -568,16 +514,15 @@ func readReceipts(r *Reader) (*types.Receipts, error) {
 	if entry.Type != TypeCompressedReceipt {
 		return nil, fmt.Errorf("expected receipts entry, got %x", entry.Type)
 	}
-	// Read block from snappy framing.
-	b, err := io.ReadAll(snappy.NewReader(bytes.NewReader(entry.Value)))
-	if err != nil {
-		return nil, fmt.Errorf("error decoding snappy: %w", err)
-	}
-	var receipts types.Receipts
-	if err := rlp.DecodeBytes(b, &receipts); err != nil {
+	// Read receipts.
+	var (
+		receipts types.Receipts
+		s        = snappy.NewReader(bytes.NewReader(entry.Value))
+	)
+	if err := rlp.Decode(s, &receipts); err != nil {
 		return nil, fmt.Errorf("error decoding block: %w", err)
 	}
-	return &receipts, nil
+	return receipts, nil
 }
 
 // headerRecord is an individual record for a historical header.

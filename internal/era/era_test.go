@@ -116,6 +116,9 @@ func TestEraBuilder(t *testing.T) {
 
 	// Verify Era contents.
 	r := NewReader(f)
+	if err := r.Verify(); err != nil {
+		t.Fatalf("invalid era: %v", err)
+	}
 	for i := uint64(0); i < head; i++ {
 		want := chain.GetBlockByNumber(i)
 		b, r, err := r.ReadBlockAndReceipts(want.NumberU64())
@@ -163,7 +166,34 @@ func makeEra() (*os.File, error) {
 	return f, nil
 }
 
-func BenchmarkEraVerify(b *testing.B) {
+var allBlocks []*types.Block
+var allReceipts []types.Receipts
+
+func BenchmarkRead(b *testing.B) {
+	f, err := makeEra()
+	if err != nil {
+		f.Close()
+		b.Fatalf("%v", err)
+	}
+	defer f.Close()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r := NewReader(f)
+		for {
+			if bb, rr, err := r.Read(); err == io.EOF {
+				break
+			} else if err != nil {
+				b.Fatalf("error reading era: %v", err)
+			} else {
+				allBlocks = append(allBlocks, bb)
+				allReceipts = append(allReceipts, rr)
+			}
+		}
+	}
+}
+
+func BenchmarkVerify(b *testing.B) {
 	f, err := makeEra()
 	if err != nil {
 		f.Close()
@@ -178,10 +208,9 @@ func BenchmarkEraVerify(b *testing.B) {
 			b.Fatalf("error verifying era: %v", err)
 		}
 	}
-
 }
 
-func BenchmarkEraVerifyHash(b *testing.B) {
+func BenchmarkHash(b *testing.B) {
 	f, err := makeEra()
 	if err != nil {
 		f.Close()
@@ -194,5 +223,4 @@ func BenchmarkEraVerifyHash(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		crypto.Keccak256(data)
 	}
-
 }
