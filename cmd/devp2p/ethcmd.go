@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/ethtest"
 	"github.com/urfave/cli/v2"
@@ -53,7 +54,35 @@ var (
 		Usage:  "<node> <msg>",
 		Action: ethNewBlock,
 	}
+	ethStatusCommand = cli.Command{
+		Name:   "status",
+		Usage:  "<version> <id> <td> <head> <genesis> <forkid>",
+		Action: ethStatus,
+	}
 )
+
+func ethStatus(ctx *cli.Context) error {
+	conn, err := ethtest.Dial(getNodeArg(ctx))
+	if err != nil {
+		return fmt.Errorf("error dialing peer: %s", err)
+	}
+
+	if ctx.NArg() < 7 {
+		exit("missing node as command-line argument")
+	}
+
+	status := &ethtest.Status{
+		ProtocolVersion: uint32(strconv.ParseUint(ctx.Args().Get(2), 10, 32)),
+		NetworkID:       chain.Config().ChainID.Uint64(),
+		TD:              chain.TD(),
+		Head:            chain.Head().Hash(),
+		Genesis:         chain.GetHeaderByNumber(0).Hash(),
+		ForkID:          chain.ForkID(),
+	}
+	if err := conn.Peer(chain, status); err != nil {
+		return fmt.Errorf("unable to peer with node: %s", err)
+	}
+}
 
 // ethNewBlock peers with node, sends the provided new block announcement, then disconnects from the peer.
 func ethNewBlock(ctx *cli.Context) error {
