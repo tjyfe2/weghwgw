@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"runtime"
@@ -123,11 +122,15 @@ if already existing. If the file ends with .gz, the output will
 be gzipped.`,
 	}
 	importHistoryCommand = &cli.Command{
-		Action:      importChain,
-		Name:        "import",
-		Usage:       "Import a blockchain file",
-		ArgsUsage:   "<filename> (<filename 2> ... <filename N>) ",
-		Flags:       flags.Merge([]cli.Flag{}, utils.DatabasePathFlags),
+		Action:    importHistory,
+		Name:      "import-history",
+		Usage:     "Import an Era archive",
+		ArgsUsage: "<dir>",
+		Flags: flags.Merge([]cli.Flag{
+			utils.TxLookupLimitFlag,
+		},
+			utils.DatabasePathFlags,
+		),
 		Description: "",
 	}
 	exportHistoryCommand = &cli.Command{
@@ -390,15 +393,17 @@ func importHistory(ctx *cli.Context) error {
 	// * import + soft verify
 	// * import + recompute state
 
-	var (
-		dir      = ctx.Args().Get(1)
-		start    = time.Now()
-		reported = time.Now()
-	)
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
 
+	chain, db := utils.MakeChain(ctx, stack, false)
+	defer db.Close()
+	var (
+		dir     = ctx.Args().Get(1)
+		network string
+	)
 	// Try to figure out the network.
-	var network string
-	for n, _ := range params.NetworkNames {
+	for _, n := range params.NetworkNames {
 		if _, err := os.Stat(path.Join(dir, era.Filename(0, n))); err == nil {
 			network = n
 			break
@@ -411,28 +416,8 @@ func importHistory(ctx *cli.Context) error {
 			return fmt.Errorf("no known network")
 		}
 	}
-
-	for i := 0; ; i++ {
-		f, err := os.Open(era.Filename(0, network))
-		if err != nil {
-			return fmt.Errorf("unable to open era: %w", err)
-		}
-		r := era.NewReader(f)
-
-		for j := 0; ; j++ {
-			block, receipts, err := r.Read()
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return fmt.Errorf("error reading block %d: %w", i*era.MaxEraBatchSize+j, err)
-			}
-
-			// Give the user some feedback that something is happening.
-			if time.Since(reported) >= 8*time.Second {
-				fmt.Printf("Verifying Era files \t\t verified=%d,\t elapsed=%s\n", i, common.PrettyDuration(time.Since(start)))
-				reported = time.Now()
-			}
-		}
+	if err := utils.ImportHistory(chain, dir, network); err != nil {
+		return err
 	}
 	return nil
 }

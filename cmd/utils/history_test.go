@@ -17,7 +17,6 @@
 package utils
 
 import (
-	"fmt"
 	"io"
 	"math/big"
 	"os"
@@ -27,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -40,7 +40,7 @@ var (
 	step  uint64 = 16
 )
 
-func TestHistoryExporter(t *testing.T) {
+func TestHistoryImportAndExport(t *testing.T) {
 	var (
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		address = crypto.PubkeyToAddress(key.PublicKey)
@@ -96,7 +96,7 @@ func TestHistoryExporter(t *testing.T) {
 
 	// Verify each Era.
 	for i := 0; i < int(count/step); i++ {
-		f, err := os.Open(path.Join(dir, fmt.Sprintf("mainnet-%05d.era", i)))
+		f, err := os.Open(path.Join(dir, era.Filename(i, "mainnet")))
 		if err != nil {
 			t.Fatalf("error opening era file: %v", err)
 		}
@@ -118,9 +118,32 @@ func TestHistoryExporter(t *testing.T) {
 			if want.Hash() != b.Hash() {
 				t.Fatalf("block hash mistmatch %d: want %s, got %s", i+j, want.Hash().Hex(), b.Hash().Hex())
 			}
+			if got := types.DeriveSha(b.Transactions(), trie.NewStackTrie(nil)); got != want.TxHash() {
+				t.Fatalf("tx hash %d mismatch: want %s, got %s", i+j, want.TxHash(), got)
+			}
+			if got := types.CalcUncleHash(b.Uncles()); got != want.UncleHash() {
+				t.Fatalf("uncle hash %d mismatch: want %s, got %s", i+j, want.UncleHash(), got)
+			}
 			if got := types.DeriveSha(r, trie.NewStackTrie(nil)); got != want.ReceiptHash() {
 				t.Fatalf("receipt root %d mismatch: want %s, got %s", i+j, want.ReceiptHash(), got)
 			}
 		}
+		if err := r.Verify(); err != nil {
+			t.Fatalf("failed to verify era %d: %v", i, err)
+		}
+	}
+
+	// Now import Era.
+	db2 := rawdb.NewMemoryDatabase()
+	genesis.MustCommit(db2)
+	imported, err := core.NewBlockChain(db2, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("unable to initialize chain: %v", err)
+	}
+	if err := ImportHistory(imported, dir, "mainnet"); err != nil {
+		t.Fatalf("failed to import chain: %v", err)
+	}
+	if have, want := imported.CurrentHeader(), chain.CurrentHeader(); have != want {
+		t.Fatalf("imported chain does not match expected, have (%d, %s) want (%d, %s)", have.Number, have.Hash(), want.Number, want.Hash())
 	}
 }

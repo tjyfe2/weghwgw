@@ -227,6 +227,48 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	return nil
 }
 
+func ImportHistory(chain *core.BlockChain, dir string, network string) error {
+	var (
+		start    = time.Now()
+		reported = time.Now()
+	)
+	for i := 0; ; i++ {
+		f, err := os.Open(path.Join(dir, era.Filename(i, network)))
+		if os.IsNotExist(err) {
+			break
+		} else if err != nil {
+			return fmt.Errorf("unable to open era: %w", err)
+		}
+
+		r := era.NewReader(f)
+
+		for j := 0; ; j++ {
+			n := i*era.MaxEraBatchSize + j
+			block, receipts, err := r.Read()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error reading block %d: %w", n, err)
+			} else if block.Number().BitLen() == 0 {
+				continue // skip genesis
+			}
+			if _, err := chain.InsertHeaderChain([]*types.Header{block.Header()}, 0); err != nil {
+				return fmt.Errorf("error inserting header %d: %w", n, err)
+			}
+			if _, err := chain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{receipts}, 0); err != nil {
+				return fmt.Errorf("error inserting body %d: %w", n, err)
+			}
+			// Give the user some feedback that something is happening.
+			if time.Since(reported) >= 8*time.Second {
+				fmt.Printf("Importing Era files \t\t imported=%d,\t elapsed=%s\n", n, common.PrettyDuration(time.Since(start)))
+				reported = time.Now()
+			}
+		}
+	}
+
+	return nil
+}
+
 func missingBlocks(chain *core.BlockChain, blocks []*types.Block) []*types.Block {
 	head := chain.CurrentBlock()
 	for i, block := range blocks {
