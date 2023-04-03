@@ -375,29 +375,37 @@ func (r *Reader) Verify() error {
 	if td, err = r.TotalDifficulty(); err != nil {
 		return fmt.Errorf("error reading total difficulty: %w", err)
 	}
-	// Starting at epoch 0, iterate through all available Era files
-	// and check the following:
-	//   * the block index is constructed correctly
-	//   * the starting total difficulty value is correct
-	//   * the accumulator is correct by recomputing it locally,
-	//     which verfies the blocks are all correct (via hash)
-	//   * the receipts root matches the value in the block
+
+	start, err := r.Start()
+	if err != nil {
+		return fmt.Errorf("error reading start offset: %w", err)
+	}
+	// Save current block offset and replace after verifying.
+	if r.offset != nil {
+		saved := *r.offset
+		r.offset = &start
+		defer func() {
+			r.offset = &saved
+		}()
+	}
+	// Accumulate block hash and total difficulty values.
 	for block, receipts, err := r.Read(); ; block, receipts, err = r.Read() {
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			return fmt.Errorf("error reading era: %w", err)
 		}
+		// Verify ommer hash.
 		ur := types.CalcUncleHash(block.Uncles())
 		if ur != block.UncleHash() {
 			return fmt.Errorf("tx root in block %d mismatch: want %s, got %s", block.NumberU64(), block.UncleHash(), ur)
 		}
+		// Verify tx hash.
 		tr := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
 		if tr != block.TxHash() {
 			return fmt.Errorf("tx root in block %d mismatch: want %s, got %s", block.NumberU64(), block.TxHash(), tr)
 		}
-		// Calculate receipt root from receipt list and check
-		// value against block.
+		// Verify receipt root.
 		rr := types.DeriveSha(receipts, trie.NewStackTrie(nil))
 		if rr != block.ReceiptHash() {
 			return fmt.Errorf("receipt root in block %d mismatch: want %s, got %s", block.NumberU64(), block.ReceiptHash(), rr)
