@@ -17,10 +17,13 @@
 package utils
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"io"
 	"math/big"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -133,6 +136,10 @@ func TestHistoryImportAndExport(t *testing.T) {
 		}
 	}
 
+	if err := validateChecksum(dir); err != nil {
+		t.Fatalf("%v", err)
+	}
+
 	// Now import Era.
 	db2 := rawdb.NewMemoryDatabase()
 	genesis.MustCommit(db2)
@@ -154,4 +161,23 @@ func TestHistoryImportAndExport(t *testing.T) {
 	if have, want := imported.CurrentHeader(), chain.CurrentHeader(); have.Hash() != want.Hash() {
 		t.Fatalf("imported chain does not match expected, have (%d, %s) want (%d, %s)", have.Number, have.Hash(), want.Number, want.Hash())
 	}
+}
+
+func validateChecksum(dir string) error {
+	b, err := os.ReadFile(path.Join(dir, "checksums.txt"))
+	if err != nil {
+		return err
+	}
+	checksums := strings.Split(string(b), "\n")
+
+	for i := 0; i < int(count/step); i++ {
+		b, err := os.ReadFile(path.Join(dir, era.Filename(i, "mainnet")))
+		if err != nil {
+			return fmt.Errorf("error opening era file: %v", err)
+		}
+		if want, got := common.HexToHash(checksums[i]), sha256.Sum256(b); want != got {
+			return fmt.Errorf("checksum %d does not match: got %s, want %s", i, got, want)
+		}
+	}
+	return nil
 }

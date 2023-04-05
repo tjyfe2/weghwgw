@@ -20,6 +20,7 @@ package utils
 import (
 	"bufio"
 	"compress/gzip"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -361,8 +362,9 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 		return fmt.Errorf("error creating output directory: %w", err)
 	}
 	var (
-		start    = time.Now()
-		reported = time.Now()
+		start     = time.Now()
+		reported  = time.Now()
+		checksums []string
 	)
 	for i := uint64(0); i <= last; i += step {
 		gen := func() error {
@@ -396,6 +398,17 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 			if err := w.Finalize(); err != nil {
 				return fmt.Errorf("export failed to finalize %s: %w", fn, err)
 			}
+
+			// Compute checksum of Era.
+			if _, err := fh.Seek(0, io.SeekStart); err != nil {
+				return err
+			}
+			b, err := io.ReadAll(fh)
+			if err != nil {
+				return err
+			}
+			checksums = append(checksums, common.Hash(sha256.Sum256(b)).Hex())
+
 			if time.Since(reported) >= 8*time.Second {
 				log.Info("Exporting blocks", "exported", i, "elapsed", common.PrettyDuration(time.Since(start)))
 				reported = time.Now()
@@ -406,6 +419,9 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 			return err
 		}
 	}
+
+	os.WriteFile(path.Join(dir, "checksums.txt"), []byte(strings.Join(checksums, "\n")), os.ModePerm)
+
 	log.Info("Exported blockchain to", "dir", dir)
 
 	return nil
