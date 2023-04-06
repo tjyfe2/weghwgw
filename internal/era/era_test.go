@@ -83,9 +83,9 @@ func makeTestChain(blocks, maxTx, minTx int) *core.BlockChain {
 	return chain
 }
 
-func TestEraBuilder(t *testing.T) {
+func TestEra1Builder(t *testing.T) {
 	// Get temp directory.
-	f, err := os.CreateTemp("", "era-test")
+	f, err := os.CreateTemp("", "era1-test")
 	if err != nil {
 		t.Fatalf("error creating temp file: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestEraBuilder(t *testing.T) {
 		builder = NewBuilder(f)
 	)
 
-	// Write blocks to Era.
+	// Write blocks to Era1.
 	head := chain.CurrentBlock().Number.Uint64()
 	for i := uint64(0); i < head; i++ {
 		var (
@@ -109,21 +109,21 @@ func TestEraBuilder(t *testing.T) {
 		}
 	}
 
-	// Finalize Era.
+	// Finalize Era1.
 	if err := builder.Finalize(); err != nil {
-		t.Fatalf("error finalizing era: %v", err)
+		t.Fatalf("error finalizing era1: %v", err)
 	}
 
-	// Verify Era contents.
+	// Verify Era1 contents.
 	r := NewReader(f)
 	if err := r.Verify(); err != nil {
-		t.Fatalf("invalid era: %v", err)
+		t.Fatalf("invalid era1: %v", err)
 	}
 	for i := uint64(0); i < head; i++ {
 		want := chain.GetBlockByNumber(i)
 		b, r, err := r.ReadBlockAndReceipts(want.NumberU64())
 		if err != nil {
-			t.Fatalf("error reading block from era: %v", err)
+			t.Fatalf("error reading block from era1: %v", err)
 		}
 		if want, got := want.NumberU64(), b.NumberU64(); want != got {
 			t.Fatalf("blocks out of order: want %d, got %d", want, got)
@@ -137,8 +137,8 @@ func TestEraBuilder(t *testing.T) {
 	}
 }
 
-func makeEra() (*os.File, error) {
-	f, err := os.CreateTemp("", "era-test")
+func makeEra1() (*os.File, error) {
+	f, err := os.CreateTemp("", "era1-test")
 	if err != nil {
 		return nil, fmt.Errorf("error creating temp file: %w", err)
 	}
@@ -158,7 +158,7 @@ func makeEra() (*os.File, error) {
 		}
 	}
 	if err := builder.Finalize(); err != nil {
-		return nil, fmt.Errorf("error finalizing era: %v", err)
+		return nil, fmt.Errorf("error finalizing era1: %v", err)
 	}
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return nil, fmt.Errorf("seek failed")
@@ -170,7 +170,7 @@ var allBlocks []*types.Block
 var allReceipts []types.Receipts
 
 func BenchmarkRead(b *testing.B) {
-	f, err := makeEra()
+	f, err := makeEra1()
 	if err != nil {
 		f.Close()
 		b.Fatalf("%v", err)
@@ -184,7 +184,7 @@ func BenchmarkRead(b *testing.B) {
 			if bb, rr, err := r.Read(); err == io.EOF {
 				break
 			} else if err != nil {
-				b.Fatalf("error reading era: %v", err)
+				b.Fatalf("error reading era1: %v", err)
 			} else {
 				allBlocks = append(allBlocks, bb)
 				allReceipts = append(allReceipts, rr)
@@ -194,7 +194,7 @@ func BenchmarkRead(b *testing.B) {
 }
 
 func BenchmarkVerify(b *testing.B) {
-	f, err := makeEra()
+	f, err := makeEra1()
 	if err != nil {
 		f.Close()
 		b.Fatalf("%v", err)
@@ -205,13 +205,13 @@ func BenchmarkVerify(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		r := NewReader(f)
 		if err := r.Verify(); err != nil {
-			b.Fatalf("error verifying era: %v", err)
+			b.Fatalf("error verifying era1: %v", err)
 		}
 	}
 }
 
 func BenchmarkHash(b *testing.B) {
-	f, err := makeEra()
+	f, err := makeEra1()
 	if err != nil {
 		f.Close()
 		b.Fatalf("%v", err)

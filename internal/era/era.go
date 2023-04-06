@@ -40,16 +40,16 @@ var (
 	TypeTotalDifficulty   uint16 = 0x06
 	TypeBlockIndex        uint16 = 0x3266
 
-	MaxEraBatchSize = 8192
+	MaxEra1BatchSize = 8192
 )
 
-// Filename returns a recognizable Era-formatted file name for the specified
+// Filename returns a recognizable Era1-formatted file name for the specified
 // epoch and network.
 func Filename(epoch int, network string) string {
-	return fmt.Sprintf("%s-%05d.era", network, epoch)
+	return fmt.Sprintf("%s-%05d.era1", network, epoch)
 }
 
-// ComputeAccumulator calculates the SSZ hash tree root of the Era
+// ComputeAccumulator calculates the SSZ hash tree root of the Era1
 // accumulator of header records.
 func ComputeAccumulator(hashes []common.Hash, tds []*big.Int) (common.Hash, error) {
 	if len(hashes) != len(tds) {
@@ -64,18 +64,21 @@ func ComputeAccumulator(hashes []common.Hash, tds []*big.Int) (common.Hash, erro
 		}
 		hh.Append(root[:])
 	}
-	hh.MerkleizeWithMixin(0, uint64(len(hashes)), uint64(MaxEraBatchSize))
+	hh.MerkleizeWithMixin(0, uint64(len(hashes)), uint64(MaxEra1BatchSize))
 	return hh.HashRoot()
 }
 
-// Builder is used to create Era archives of block data.
+// Builder is used to create Era1 archives of block data.
 //
-// Era files are themselves e2store files. For more information on this format,
+// Era1 files are themselves e2store files. For more information on this format,
 // see https://github.com/status-im/nimbus-eth2/blob/stable/docs/e2store.md.
 //
-// The overall structure of an Era file can be summarized with this definition:
+// The overall structure of an Era1 file follows closely the structure of an Era file
+// which contains Consensus Layer data (and as a byproduct, EL data after the merge).
 //
-//	era := Version | block-tuple* | other-entries* | Accumulator | StartTD | BlockIndex
+// The structure can be summarized through this definition:
+//
+//	era1 := Version | block-tuple* | other-entries* | Accumulator | StartTD | BlockIndex
 //	block-tuple :=  CompressedBlock | CompressedReceipts
 //
 // Each basic element is its own entry:
@@ -97,7 +100,7 @@ func ComputeAccumulator(hashes []common.Hash, tds []*big.Int) (common.Hash, erro
 // entries in the file is recorded in count.
 //
 // Due to the accumulator size limit of 8192, the maximum number of blocks in
-// an Era batch is also 8192.
+// an Era1 batch is also 8192.
 type Builder struct {
 	w        *e2store.Writer
 	startNum *uint64
@@ -133,7 +136,7 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) 
 // AddRLP writes a compressed block entry and compressed receipts entry to the
 // underlying e2store file.
 func (b *Builder) AddRLP(block, receipts []byte, number uint64, hash common.Hash, td, difficulty *big.Int) error {
-	// Write Era version entry before first block.
+	// Write Era1 version entry before first block.
 	if b.startNum == nil {
 		if err := writeVersion(b.w); err != nil {
 			return err
@@ -142,8 +145,8 @@ func (b *Builder) AddRLP(block, receipts []byte, number uint64, hash common.Hash
 		b.startNum = &n
 		b.startTd = new(big.Int).Sub(td, difficulty)
 	}
-	if len(b.indexes) >= MaxEraBatchSize {
-		return fmt.Errorf("exceeds maximum batch size of %d", MaxEraBatchSize)
+	if len(b.indexes) >= MaxEra1BatchSize {
+		return fmt.Errorf("exceeds maximum batch size of %d", MaxEra1BatchSize)
 	}
 
 	// Record absolute offset and block hash for entry.
@@ -250,8 +253,8 @@ func writeVersion(w *e2store.Writer) error {
 	return err
 }
 
-// Reader reads an Era archive.
-// See Builder documentation for a detailed explanation of the Era format.
+// Reader reads an Era1 archive.
+// See Builder documentation for a detailed explanation of the Era1 format.
 type Reader struct {
 	r      io.ReadSeekCloser
 	offset *uint64
@@ -262,7 +265,7 @@ func NewReader(r io.ReadSeekCloser) *Reader {
 	return &Reader{r: r}
 }
 
-// Read reads one (block, receipts) tuple from an Era archive.
+// Read reads one (block, receipts) tuple from an Era1 archive.
 func (r *Reader) Read() (*types.Block, types.Receipts, error) {
 	if r.offset == nil {
 		m, err := readMetadata(r)
@@ -279,8 +282,8 @@ func (r *Reader) Read() (*types.Block, types.Receipts, error) {
 	return block, receipts, nil
 }
 
-// ReadBlock reads the block number n from the Era archive.
-// The method returns error if the Era file is malformed, the request is
+// ReadBlock reads the block number n from the Era1 archive.
+// The method returns error if the Era1 file is malformed, the request is
 // out-of-bounds, as determined by the block index, or if the block number at
 // the calculated offset doesn't match the requested.
 func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
@@ -289,7 +292,7 @@ func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error reading index: %w", err)
 	}
-	// Determine if the request can served by current the Era file, e.g. n
+	// Determine if the request can served by current the Era1 file, e.g. n
 	// must be within the range of blocks specified in the block index
 	// metadata.
 	if n < m.start || m.start+m.count < n {
@@ -309,9 +312,9 @@ func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
 }
 
 // ReadBlockAndReceipts reads the block number n and associated receipts from
-// the Era archive.
+// the Era1 archive.
 
-// The method returns error if the Era file is malformed, the request is
+// The method returns error if the Era1 file is malformed, the request is
 // out-of-bounds, as determined by the block index, or if the block number at
 // the calculated offset doesn't match the requested.
 func (r *Reader) ReadBlockAndReceipts(n uint64) (*types.Block, types.Receipts, error) {
@@ -323,7 +326,7 @@ func (r *Reader) ReadBlockAndReceipts(n uint64) (*types.Block, types.Receipts, e
 	return block, receipts, err
 }
 
-// Accumulator reads the accumulator entry in the Era file.
+// Accumulator reads the accumulator entry in the Era1 file.
 func (r *Reader) Accumulator() (common.Hash, error) {
 	_, err := r.seek(0, io.SeekStart)
 	if err != nil {
@@ -336,7 +339,7 @@ func (r *Reader) Accumulator() (common.Hash, error) {
 	return common.BytesToHash(entry.Value), nil
 }
 
-// TotalDifficulty reads the total difficulty entry in the Era file.
+// TotalDifficulty reads the total difficulty entry in the Era1 file.
 func (r *Reader) TotalDifficulty() (*big.Int, error) {
 	_, err := r.seek(0, io.SeekStart)
 	if err != nil {
@@ -355,7 +358,7 @@ func (r *Reader) Start() (uint64, error) {
 	return m.start, err
 }
 
-// Count returns the total number of blocks in the Era.
+// Count returns the total number of blocks in the Era1.
 func (r *Reader) Count() (uint64, error) {
 	m, err := readMetadata(r)
 	return m.count, err
@@ -393,7 +396,7 @@ func (r *Reader) Verify() error {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return fmt.Errorf("error reading era: %w", err)
+			return fmt.Errorf("error reading era1: %w", err)
 		}
 		// Verify ommer hash.
 		ur := types.CalcUncleHash(block.Uncles())
@@ -439,7 +442,7 @@ type metadata struct {
 	start, count uint64
 }
 
-// readMetadata reads the metadata stored in an Era file's block index.
+// readMetadata reads the metadata stored in an Era1 file's block index.
 func readMetadata(r *Reader) (m metadata, err error) {
 	// Seek to count.
 	if _, err = r.seek(-8, io.SeekEnd); err != nil {

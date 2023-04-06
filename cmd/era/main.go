@@ -50,7 +50,7 @@ var (
 	batchSizeFlag = &cli.IntFlag{
 		Name:  "batchSize",
 		Usage: "number blocks per era batch",
-		Value: era.MaxEraBatchSize,
+		Value: era.MaxEra1BatchSize,
 	}
 	txsFlag = &cli.BoolFlag{
 		Name:  "txs",
@@ -140,7 +140,7 @@ func info(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("invalid block number: %w", err)
 	}
-	era, err := openEra(ctx, epoch)
+	era, err := openEra1(ctx, epoch)
 	if err != nil {
 		return err
 	}
@@ -175,8 +175,8 @@ func info(ctx *cli.Context) error {
 	return nil
 }
 
-// openEra opens an Era file at a certain epoch.
-func openEra(ctx *cli.Context, epoch uint64) (*era.Reader, error) {
+// openEra1 opens an Era file at a certain epoch.
+func openEra1(ctx *cli.Context, epoch uint64) (*era.Reader, error) {
 	var (
 		dir     = ctx.String(dirFlag.Name)
 		network = ctx.String(networkFlag.Name)
@@ -189,7 +189,7 @@ func openEra(ctx *cli.Context, epoch uint64) (*era.Reader, error) {
 	return era.NewReader(f), nil
 }
 
-// verify checks each Era file in a directory to ensure it is well-formed and
+// verify checks each Era1 file in a directory to ensure it is well-formed and
 // that the accumulator matches the expected value.
 func verify(ctx *cli.Context) error {
 	if ctx.Args().Len() != 1 {
@@ -213,7 +213,7 @@ func verify(ctx *cli.Context) error {
 		name := path.Join(dir, era.Filename(i, network))
 		f, err := os.Open(name)
 		if err != nil {
-			return fmt.Errorf("error opening era file %s: %w", name, err)
+			return fmt.Errorf("error opening era1 file %s: %w", name, err)
 		}
 		defer f.Close()
 
@@ -228,12 +228,12 @@ func verify(ctx *cli.Context) error {
 
 		// Recompute accumulator.
 		if err := r.Verify(); err != nil {
-			return fmt.Errorf("error verify era file %s: %w", name, err)
+			return fmt.Errorf("error verify era1 file %s: %w", name, err)
 		}
 
 		// Give the user some feedback that something is happening.
 		if time.Since(reported) >= 8*time.Second {
-			fmt.Printf("Verifying Era files \t\t verified=%d,\t elapsed=%s\n", i, common.PrettyDuration(time.Since(start)))
+			fmt.Printf("Verifying Era1 files \t\t verified=%d,\t elapsed=%s\n", i, common.PrettyDuration(time.Since(start)))
 			reported = time.Now()
 		}
 	}
