@@ -227,10 +227,14 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	return nil
 }
 
-func ImportHistory(chain *core.BlockChain, dir string, network string) error {
+func ImportHistory(hc *core.HeaderChain, chain *core.BlockChain, dir string, network string) error {
+	if chain.CurrentBlock().Number.BitLen() != 0 {
+		return fmt.Errorf("history import only supported when starting from genesis")
+	}
 	var (
 		start    = time.Now()
 		reported = time.Now()
+		forker   = core.NewForkChoice(chain, nil)
 	)
 	for i := 0; ; i++ {
 		f, err := os.Open(path.Join(dir, era.Filename(i, network)))
@@ -243,7 +247,7 @@ func ImportHistory(chain *core.BlockChain, dir string, network string) error {
 		r := era.NewReader(f)
 
 		for j := 0; ; j++ {
-			n := i*era.MaxEraBatchSize + j
+			n := i*era.MaxEra1BatchSize + j
 			block, receipts, err := r.Read()
 			if err == io.EOF {
 				break
@@ -252,8 +256,11 @@ func ImportHistory(chain *core.BlockChain, dir string, network string) error {
 			} else if block.Number().BitLen() == 0 {
 				continue // skip genesis
 			}
-			if _, err := chain.InsertHeaderChain([]*types.Header{block.Header()}, 0); err != nil {
+			// Insert blockchain data.
+			if status, err := hc.InsertHeaderChain([]*types.Header{block.Header()}, start, forker); err != nil {
 				return fmt.Errorf("error inserting header %d: %w", n, err)
+			} else if status != core.CanonStatTy {
+				return fmt.Errorf("error inserting header %d, not canon: %v", n, status)
 			}
 			if _, err := chain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{receipts}, 0); err != nil {
 				return fmt.Errorf("error inserting body %d: %w", n, err)

@@ -352,7 +352,7 @@ func importChain(ctx *cli.Context) error {
 
 func exportChain(ctx *cli.Context) error {
 	if ctx.Args().Len() < 1 {
-		utils.Fatalf("This command requires an argument.")
+		utils.Fatalf(ctx.App.Usage)
 	}
 
 	stack, _ := makeConfigNode(ctx)
@@ -389,19 +389,27 @@ func exportChain(ctx *cli.Context) error {
 }
 
 func importHistory(ctx *cli.Context) error {
-	// 2 cases:
-	// * import + soft verify
-	// * import + recompute state
+	if ctx.Args().Len() != 1 {
+		utils.Fatalf(ctx.App.Usage)
+	}
 
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	chain, db := utils.MakeChain(ctx, stack, false)
 	defer db.Close()
+
+	hc, err := core.NewHeaderChain(db, chain.Config(), chain.Engine(), func() bool { return false })
+	if err != nil {
+		return err
+	}
+
 	var (
+		start   = time.Now()
 		dir     = ctx.Args().Get(1)
 		network string
 	)
+
 	// Try to figure out the network.
 	for _, n := range params.NetworkNames {
 		if _, err := os.Stat(path.Join(dir, era.Filename(0, n))); err == nil {
@@ -409,6 +417,7 @@ func importHistory(ctx *cli.Context) error {
 			break
 		}
 	}
+	// If not found, try "unknown".
 	if network == "" {
 		if _, err := os.Stat(path.Join(dir, era.Filename(0, "unknown"))); err == nil {
 			network = "unknown"
@@ -416,9 +425,11 @@ func importHistory(ctx *cli.Context) error {
 			return fmt.Errorf("no known network")
 		}
 	}
-	if err := utils.ImportHistory(chain, dir, network); err != nil {
+	if err := utils.ImportHistory(hc, chain, dir, network); err != nil {
 		return err
 	}
+
+	fmt.Printf("Import done in %v\n", time.Since(start))
 	return nil
 }
 
@@ -446,7 +457,7 @@ func exportHistory(ctx *cli.Context) error {
 	if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
 		utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
 	}
-	err := utils.ExportHistory(chain, ctx.Args().First(), uint64(first), uint64(last), uint64(era.MaxEraBatchSize))
+	err := utils.ExportHistory(chain, ctx.Args().First(), uint64(first), uint64(last), uint64(era.MaxEra1BatchSize))
 	if err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
