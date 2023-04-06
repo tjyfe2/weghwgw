@@ -406,7 +406,7 @@ func importHistory(ctx *cli.Context) error {
 
 	var (
 		start   = time.Now()
-		dir     = ctx.Args().Get(1)
+		dir     = ctx.Args().Get(0)
 		network string
 	)
 
