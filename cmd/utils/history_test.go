@@ -147,11 +147,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to initialize chain: %v", err)
 	}
-	hc, err := core.NewHeaderChain(db2, chain.Config(), chain.Engine(), func() bool { return false })
-	if err != nil {
-		t.Fatalf("unable to initialize header chain: %v", err)
-	}
-	if err := ImportHistory(hc, imported, dir, "mainnet"); err != nil {
+	if err := ImportHistory(imported, db2, dir, "mainnet"); err != nil {
 		t.Fatalf("failed to import chain: %v", err)
 	}
 	// Set head since header chain was updated out from under block chain.

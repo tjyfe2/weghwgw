@@ -19,6 +19,7 @@ package utils
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
 	"errors"
@@ -228,29 +229,46 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	return nil
 }
 
+type NopCloser struct {
+	io.ReadSeeker
+}
+
+func (n NopCloser) Close() error {
+	return nil
+}
+
 func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, network string) error {
+	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
+		return fmt.Errorf("history import only supported when starting from genesis")
+	}
+	b, err := os.ReadFile(path.Join(dir, "checksums.txt"))
+	if err != nil {
+		return err
+	}
+	checksums := strings.Split(string(b), "\n")
+
 	hc, err := core.NewHeaderChain(db, chain.Config(), chain.Engine(), func() bool { return false })
 	if err != nil {
 		return err
 	}
 
-	if chain.CurrentBlock().Number.BitLen() != 0 {
-		return fmt.Errorf("history import only supported when starting from genesis")
-	}
 	var (
 		start    = time.Now()
 		reported = time.Now()
 		forker   = core.NewForkChoice(chain, nil)
 	)
 	for i := 0; ; i++ {
-		f, err := os.Open(path.Join(dir, era.Filename(i, network)))
+		b, err := os.ReadFile(path.Join(dir, era.Filename(i, network)))
 		if os.IsNotExist(err) {
 			break
 		} else if err != nil {
 			return fmt.Errorf("unable to open era: %w", err)
 		}
+		if have, want := common.Hash(sha256.Sum256(b)).Hex(), checksums[i]; have != want {
+			return fmt.Errorf("checksum mismatch: have %s, want %s", have, want)
+		}
 
-		r := era.NewReader(f)
+		r := era.NewReader(NopCloser{bytes.NewReader(b)})
 
 		for j := 0; ; j++ {
 			n := i*era.MaxEra1BatchSize + j
