@@ -256,12 +256,12 @@ func writeVersion(w *e2store.Writer) error {
 // Reader reads an Era1 archive.
 // See Builder documentation for a detailed explanation of the Era1 format.
 type Reader struct {
-	r      io.ReadSeekCloser
+	r      io.ReadSeeker
 	offset *uint64
 }
 
 // NewReader returns a new Reader instance.
-func NewReader(r io.ReadSeekCloser) *Reader {
+func NewReader(r io.ReadSeeker) *Reader {
 	return &Reader{r: r}
 }
 
@@ -425,11 +425,6 @@ func (r *Reader) Verify() error {
 		return fmt.Errorf("expected accumulator root does not match calculated: got %s, want %s", got, want)
 	}
 	return nil
-}
-
-// Close implements a closer.
-func (r *Reader) Close() error {
-	return r.r.Close()
 }
 
 // seek is a shorthand method for calling seek on the inner reader.
