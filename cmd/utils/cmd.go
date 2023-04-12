@@ -229,74 +229,99 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	return nil
 }
 
-type NopCloser struct {
-	io.ReadSeeker
+func readList(filename string) ([]string, error) {
+	b, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(string(b), "\n"), nil
 }
 
-func (n NopCloser) Close() error {
-	return nil
-}
-
+// ImportHistory imports Era1 files containing historical block information,
+// starting from genesis.
 func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, network string) error {
 	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
 		return fmt.Errorf("history import only supported when starting from genesis")
 	}
-	b, err := os.ReadFile(path.Join(dir, "checksums.txt"))
+	checksums, err := readList(path.Join(dir, "checksums.txt"))
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to read checksums.txt: %w", err)
 	}
-	checksums := strings.Split(string(b), "\n")
-
+	// Open a separate header chain to insert headers directly and bypass verification.
 	hc, err := core.NewHeaderChain(db, chain.Config(), chain.Engine(), func() bool { return false })
 	if err != nil {
 		return err
 	}
-
 	var (
-		start    = time.Now()
-		reported = time.Now()
-		forker   = core.NewForkChoice(chain, nil)
+		start     = time.Now()
+		reported  = time.Now()
+		forker    = core.NewForkChoice(chain, nil)
+		batchSize = 512
 	)
 	for i := 0; ; i++ {
+		// Read entire Era1 to memory. Max historical Era1 is around
+		// 600MB. This is a lot to load at once, but it speeds up the
+		// import substantially.
 		b, err := os.ReadFile(path.Join(dir, era.Filename(i, network)))
 		if os.IsNotExist(err) {
 			break
 		} else if err != nil {
 			return fmt.Errorf("unable to open era: %w", err)
 		}
+
+		// Verify era1 against corresponding checksum.
+		if len(checksums) <= i {
+			return fmt.Errorf("invalid checksums.txt: attempting to import more era1 files than have checksums")
+		}
 		if have, want := common.Hash(sha256.Sum256(b)).Hex(), checksums[i]; have != want {
 			return fmt.Errorf("checksum mismatch: have %s, want %s", have, want)
 		}
 
-		r := era.NewReader(NopCloser{bytes.NewReader(b)})
-
-		for j := 0; ; j++ {
-			n := i*era.MaxEra1BatchSize + j
-			block, receipts, err := r.Read()
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return fmt.Errorf("error reading block %d: %w", n, err)
-			} else if block.Number().BitLen() == 0 {
-				continue // skip genesis
+		// Import all block data from Era1.
+		r := era.NewReader(bytes.NewReader(b))
+		for j := 0; ; j += batchSize {
+			var (
+				headers  []*types.Header
+				blocks   []*types.Block
+				receipts []types.Receipts
+				done     = false
+			)
+			for k := 0; k < batchSize; k++ {
+				n := i*era.MaxEra1BatchSize + j
+				b, r, err := r.Read()
+				if err == io.EOF {
+					done = true
+					break
+				} else if err != nil {
+					return fmt.Errorf("error reading block %d: %w", n, err)
+				} else if b.Number().BitLen() == 0 {
+					continue // skip genesis
+				}
+				headers = append(headers, b.Header())
+				blocks = append(blocks, b)
+				receipts = append(receipts, r)
 			}
-			// Insert blockchain data.
-			if status, err := hc.InsertHeaderChain([]*types.Header{block.Header()}, start, forker); err != nil {
-				return fmt.Errorf("error inserting header %d: %w", n, err)
+			if status, err := hc.InsertHeaderChain(headers, start, forker); err != nil {
+				return fmt.Errorf("error inserting header in era %d: %w", i, err)
 			} else if status != core.CanonStatTy {
-				return fmt.Errorf("error inserting header %d, not canon: %v", n, status)
+				return fmt.Errorf("error inserting header in era %d, not canon: %v", i, status)
 			}
-			if _, err := chain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{receipts}, 0); err != nil {
-				return fmt.Errorf("error inserting body %d: %w", n, err)
+			if _, err := chain.InsertReceiptChain(blocks, receipts, 0); err != nil {
+				return fmt.Errorf("error inserting body in era %d: %w", i, err)
+			}
+			if done {
+				break
 			}
 			// Give the user some feedback that something is happening.
 			if time.Since(reported) >= 8*time.Second {
-				fmt.Printf("Importing Era files \t\t imported=%d,\t elapsed=%s\n", n, common.PrettyDuration(time.Since(start)))
+				log.Info("Importing Era files", "imported", j, "elapsed", common.PrettyDuration(time.Since(start)))
 				reported = time.Now()
 			}
 		}
 	}
 
+	// Manually update the head snap block so that when user restarts geth,
+	// it is able to begin syncing from the last imported block.
 	rawdb.WriteHeadFastBlockHash(db, hc.CurrentHeader().Hash())
 
 	return nil
