@@ -228,7 +228,12 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	return nil
 }
 
-func ImportHistory(hc *core.HeaderChain, chain *core.BlockChain, dir string, network string) error {
+func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, network string) error {
+	hc, err := core.NewHeaderChain(db, chain.Config(), chain.Engine(), func() bool { return false })
+	if err != nil {
+		return err
+	}
+
 	if chain.CurrentBlock().Number.BitLen() != 0 {
 		return fmt.Errorf("history import only supported when starting from genesis")
 	}
@@ -273,6 +278,8 @@ func ImportHistory(hc *core.HeaderChain, chain *core.BlockChain, dir string, net
 			}
 		}
 	}
+
+	rawdb.WriteHeadFastBlockHash(db, hc.CurrentHeader().Hash())
 
 	return nil
 }

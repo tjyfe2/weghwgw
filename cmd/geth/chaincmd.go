@@ -399,11 +399,6 @@ func importHistory(ctx *cli.Context) error {
 	chain, db := utils.MakeChain(ctx, stack, false)
 	defer db.Close()
 
-	hc, err := core.NewHeaderChain(db, chain.Config(), chain.Engine(), func() bool { return false })
-	if err != nil {
-		return err
-	}
-
 	var (
 		start   = time.Now()
 		dir     = ctx.Args().Get(0)
@@ -425,7 +420,7 @@ func importHistory(ctx *cli.Context) error {
 			return fmt.Errorf("no known network")
 		}
 	}
-	if err := utils.ImportHistory(hc, chain, dir, network); err != nil {
+	if err := utils.ImportHistory(chain, db, dir, network); err != nil {
 		return err
 	}
 
