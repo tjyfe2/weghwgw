@@ -74,11 +74,11 @@ func (w *Writer) CurrentOffset() (int64, error) {
 // For more information on this format, see
 // https://github.com/status-im/nimbus-eth2/blob/stable/docs/e2store.md
 type Reader struct {
-	r io.ReadCloser
+	r io.Reader
 }
 
 // NewReader returns a new Reader that reads from r.
-func NewReader(r io.ReadCloser) *Reader {
+func NewReader(r io.Reader) *Reader {
 	return &Reader{r}
 }
 
@@ -147,9 +147,4 @@ func (r *Reader) FindAll(typ uint16) ([]*Entry, error) {
 		}
 		all = append(all, entry)
 	}
-}
-
-// Close closes the underlying io.ReadCloser.
-func (r *Reader) Close() error {
-	return r.r.Close()
 }

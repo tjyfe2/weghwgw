@@ -306,7 +306,7 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 			} else if status != core.CanonStatTy {
 				return fmt.Errorf("error inserting header in era %d, not canon: %v", i, status)
 			}
-			if _, err := chain.InsertReceiptChain(blocks, receipts, 0); err != nil {
+			if _, err := chain.InsertReceiptChain(blocks, receipts, 2^64-1); err != nil {
 				return fmt.Errorf("error inserting body in era %d: %w", i, err)
 			}
 			if done {
