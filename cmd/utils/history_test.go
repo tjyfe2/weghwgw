@@ -141,7 +141,15 @@ func TestHistoryImportAndExport(t *testing.T) {
 	}
 
 	// Now import Era.
-	db2 := rawdb.NewMemoryDatabase()
+	freezer := t.TempDir()
+	db2, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), freezer, "", false)
+	if err != nil {
+		panic(err)
+	}
+	t.Cleanup(func() {
+		db.Close()
+	})
+
 	genesis.MustCommit(db2)
 	imported, err := core.NewBlockChain(db2, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
 	if err != nil {

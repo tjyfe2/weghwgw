@@ -247,11 +247,6 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 	if err != nil {
 		return fmt.Errorf("unable to read checksums.txt: %w", err)
 	}
-	// Open a separate header chain to insert headers directly and bypass verification.
-	hc, err := core.NewHeaderChain(db, chain.Config(), chain.Engine(), func() bool { return false })
-	if err != nil {
-		return err
-	}
 	var (
 		start     = time.Now()
 		reported  = time.Now()
@@ -301,7 +296,7 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 				blocks = append(blocks, b)
 				receipts = append(receipts, r)
 			}
-			if status, err := hc.InsertHeaderChain(headers, start, forker); err != nil {
+			if status, err := chain.HeaderChain().InsertHeaderChain(headers, start, forker); err != nil {
 				return fmt.Errorf("error inserting header in era %d: %w", i, err)
 			} else if status != core.CanonStatTy {
 				return fmt.Errorf("error inserting header in era %d, not canon: %v", i, status)
@@ -322,7 +317,7 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 
 	// Manually update the head snap block so that when user restarts geth,
 	// it is able to begin syncing from the last imported block.
-	rawdb.WriteHeadFastBlockHash(db, hc.CurrentHeader().Hash())
+	rawdb.WriteHeadFastBlockHash(db, chain.CurrentHeader().Hash())
 
 	return nil
 }
