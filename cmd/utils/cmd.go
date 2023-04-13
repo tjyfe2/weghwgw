@@ -248,10 +248,10 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 		return fmt.Errorf("unable to read checksums.txt: %w", err)
 	}
 	var (
-		start     = time.Now()
-		reported  = time.Now()
-		forker    = core.NewForkChoice(chain, nil)
-		batchSize = 512
+		start    = time.Now()
+		reported = time.Now()
+		imported = 0
+		forker   = core.NewForkChoice(chain, nil)
 	)
 	for i := 0; ; i++ {
 		// Read entire Era1 to memory. Max historical Era1 is around
@@ -274,44 +274,29 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 
 		// Import all block data from Era1.
 		r := era.NewReader(bytes.NewReader(b))
-		for j := 0; ; j += batchSize {
-			var (
-				headers  []*types.Header
-				blocks   []*types.Block
-				receipts []types.Receipts
-				done     = false
-			)
+		for j := 0; ; j += 1 {
 			n := i*era.MaxEra1BatchSize + j
-			for k := 0; k < batchSize; k++ {
-				b, r, err := r.Read()
-				if err == io.EOF {
-					done = true
-					break
-				} else if err != nil {
-					return fmt.Errorf("error reading block %d: %w", n+k, err)
-				} else if b.Number().BitLen() == 0 {
-					continue // skip genesis
-				}
-				headers = append(headers, b.Header())
-				blocks = append(blocks, b)
-				receipts = append(receipts, r)
-			}
-			if len(headers) != 0 {
-				if status, err := chain.HeaderChain().InsertHeaderChain(headers, start, forker); err != nil {
-					return fmt.Errorf("error inserting header from era %d: %w", i, err)
-				} else if status != core.CanonStatTy {
-					return fmt.Errorf("error inserting header from era %d, not canon: %v", i, status)
-				}
-				if _, err := chain.InsertReceiptChain(blocks, receipts, 2^64-1); err != nil {
-					return fmt.Errorf("error inserting body from era %d: %w", i, err)
-				}
-			}
-			if done {
+			b, r, err := r.Read()
+			if err == io.EOF {
 				break
+			} else if err != nil {
+				return fmt.Errorf("error reading block %d: %w", n, err)
+			} else if b.Number().BitLen() == 0 {
+				continue // skip genesis
 			}
+			if status, err := chain.HeaderChain().InsertHeaderChain([]*types.Header{b.Header()}, start, forker); err != nil {
+				return fmt.Errorf("error inserting header %d: %w", n, err)
+			} else if status != core.CanonStatTy {
+				return fmt.Errorf("error inserting header %d, not canon: %v", n, status)
+			}
+			if _, err := chain.InsertReceiptChain([]*types.Block{b}, []types.Receipts{r}, 2^64-1); err != nil {
+				return fmt.Errorf("error inserting body %d: %w", n, err)
+			}
+			imported += 1
 			// Give the user some feedback that something is happening.
 			if time.Since(reported) >= 8*time.Second {
-				log.Info("Importing Era files", "imported", j, "elapsed", common.PrettyDuration(time.Since(start)))
+				log.Info("Importing Era files", "head", n, "imported", imported, "elapsed", common.PrettyDuration(time.Since(start)))
+				imported = 0
 				reported = time.Now()
 			}
 		}
