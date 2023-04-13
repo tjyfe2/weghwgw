@@ -281,14 +281,14 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 				receipts []types.Receipts
 				done     = false
 			)
+			n := i*era.MaxEra1BatchSize + j
 			for k := 0; k < batchSize; k++ {
-				n := i*era.MaxEra1BatchSize + j
 				b, r, err := r.Read()
 				if err == io.EOF {
 					done = true
 					break
 				} else if err != nil {
-					return fmt.Errorf("error reading block %d: %w", n, err)
+					return fmt.Errorf("error reading block %d: %w", n+k, err)
 				} else if b.Number().BitLen() == 0 {
 					continue // skip genesis
 				}
@@ -296,13 +296,15 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 				blocks = append(blocks, b)
 				receipts = append(receipts, r)
 			}
-			if status, err := chain.HeaderChain().InsertHeaderChain(headers, start, forker); err != nil {
-				return fmt.Errorf("error inserting header in era %d: %w", i, err)
-			} else if status != core.CanonStatTy {
-				return fmt.Errorf("error inserting header in era %d, not canon: %v", i, status)
-			}
-			if _, err := chain.InsertReceiptChain(blocks, receipts, 2^64-1); err != nil {
-				return fmt.Errorf("error inserting body in era %d: %w", i, err)
+			if len(headers) != 0 {
+				if status, err := chain.HeaderChain().InsertHeaderChain(headers, start, forker); err != nil {
+					return fmt.Errorf("error inserting header from era %d: %w", i, err)
+				} else if status != core.CanonStatTy {
+					return fmt.Errorf("error inserting header from era %d, not canon: %v", i, status)
+				}
+				if _, err := chain.InsertReceiptChain(blocks, receipts, 2^64-1); err != nil {
+					return fmt.Errorf("error inserting body from era %d: %w", i, err)
+				}
 			}
 			if done {
 				break
