@@ -17,8 +17,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"path"
@@ -27,10 +29,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/urfave/cli/v2"
 )
 
@@ -80,6 +85,12 @@ var (
 		Usage:     "verifies each epoch against expected accumulator root",
 		Action:    verify,
 	}
+	rewriteCommand = &cli.Command{
+		Name:      "rewrite",
+		ArgsUsage: "<era> <count>",
+		Usage:     "rewrites the era starting the blocks at 1",
+		Action:    rewrite,
+	}
 )
 
 func init() {
@@ -87,6 +98,7 @@ func init() {
 		blockCommand,
 		infoCommand,
 		verifyCommand,
+		rewriteCommand,
 	}
 	app.Flags = []cli.Flag{
 		dirFlag,
@@ -109,11 +121,10 @@ func block(ctx *cli.Context) error {
 		return fmt.Errorf("invalid block number: %w", err)
 	}
 
-	r, err := openEra(ctx, num/uint64(ctx.Int(batchSizeFlag.Name)))
+	r, err := openEra1(ctx, num/uint64(ctx.Int(batchSizeFlag.Name)))
 	if err != nil {
 		return fmt.Errorf("error opening era: %w", err)
 	}
-	defer r.Close()
 
 	// Read block with number.
 	block, err := r.ReadBlock(num)
@@ -144,7 +155,6 @@ func info(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	defer era.Close()
 
 	acc, err := era.Accumulator()
 	if err != nil {
@@ -238,6 +248,69 @@ func verify(ctx *cli.Context) error {
 		}
 	}
 
+	return nil
+}
+
+func rewrite(ctx *cli.Context) error {
+	if ctx.Args().Len() != 2 {
+		return fmt.Errorf("usage: era rewrite <era> <count>")
+	}
+	start, err := strconv.ParseUint(ctx.Args().First(), 10, 64)
+	if err != nil {
+		return fmt.Errorf("start value must be integer")
+	}
+	count, err := strconv.ParseUint(ctx.Args().Get(1), 10, 64)
+	if err != nil {
+		return fmt.Errorf("count value must be integer")
+	}
+	var (
+		n       = uint64(0)
+		dir     = ctx.String(dirFlag.Name)
+		network = ctx.String(networkFlag.Name)
+		genesis = core.DefaultGenesisBlock().ToBlock()
+		td      = genesis.Difficulty()
+		last    common.Hash
+	)
+	for i := uint64(0); i < count; i++ {
+		buf, err := os.ReadFile(path.Join(dir, era.Filename(int(start+i), network)))
+		if err != nil {
+			return err
+		}
+		f, err := os.Create(path.Join(dir, era.Filename(int(i), network)))
+		if err != nil {
+			return fmt.Errorf("unable to create era %d: %w", i, err)
+		}
+		defer f.Close()
+		var (
+			r = era.NewReader(bytes.NewReader(buf))
+			b = era.NewBuilder(f)
+		)
+		for {
+			block, receipts, err := r.Read()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return fmt.Errorf("error reading era %d: %w", start+i, err)
+			} else if n == 0 {
+				// special case for genesis
+				block = genesis
+				receipts = nil
+			}
+			header := block.Header()
+			header.Number.SetUint64(n)
+			header.ParentHash = last
+			block = types.NewBlock(header, block.Transactions(), block.Uncles(), receipts, trie.NewStackTrie(nil))
+			if err := b.Add(block, receipts, td); err != nil {
+				return fmt.Errorf("error adding to era %d: %w", start+i, err)
+			}
+			last = block.Hash()
+			td = td.Add(td, block.Difficulty())
+			n += 1
+		}
+		if err := b.Finalize(); err != nil {
+			return fmt.Errorf("error finalizing era %d: %w", start+i, err)
+		}
+	}
 	return nil
 }
 

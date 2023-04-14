@@ -185,3 +185,35 @@ func validateChecksum(dir string) error {
 	}
 	return nil
 }
+
+func BenchmarkHistoryImport(b *testing.B) {
+	freezer := b.TempDir()
+	db, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), freezer, "", false)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	genesis := core.DefaultGenesisBlock()
+	genesis.MustCommit(db)
+
+	imported, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	if err != nil {
+		b.Fatalf("unable to initialize chain: %v", err)
+	}
+
+	var (
+		cwd, _ = os.Getwd()
+		dir    = path.Join(cwd, "testdata", "eras")
+	)
+
+	b.ResetTimer()
+
+	if err := ImportHistory(imported, db, dir, "mainnet"); err != nil {
+		b.Fatalf("failed to import chain: %v", err)
+	}
+
+	if imported.CurrentHeader().Number.BitLen() == 0 {
+		b.Fatalf("0 blocks imported")
+	}
+}
