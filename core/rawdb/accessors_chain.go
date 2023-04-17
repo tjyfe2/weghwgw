@@ -812,6 +812,33 @@ func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *type
 	return nil
 }
 
+// WriteAncientBlocksRLP writes raw block data into ancient store and returns
+// the total written size.
+func WriteAncientBlocksRLP(db ethdb.AncientWriter, start uint64, tds []*big.Int, hashes, headers, bodies, receipts [][]byte) (int64, error) {
+	return db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		num := start
+		for i := range hashes {
+			if err := op.AppendRaw(ChainFreezerHashTable, num, hashes[i]); err != nil {
+				return fmt.Errorf("can't add block %d hash: %v", num, err)
+			}
+			if err := op.AppendRaw(ChainFreezerHeaderTable, num, headers[i]); err != nil {
+				return fmt.Errorf("can't append block header %d: %v", num, err)
+			}
+			if err := op.AppendRaw(ChainFreezerBodiesTable, num, bodies[i]); err != nil {
+				return fmt.Errorf("can't append block body %d: %v", num, err)
+			}
+			if err := op.AppendRaw(ChainFreezerReceiptTable, num, receipts[i]); err != nil {
+				return fmt.Errorf("can't append block %d receipts: %v", num, err)
+			}
+			if err := op.Append(ChainFreezerDifficultyTable, num, tds[i]); err != nil {
+				return fmt.Errorf("can't append block %d total difficulty: %v", num, err)
+			}
+			num++
+		}
+		return nil
+	})
+}
+
 // DeleteBlock removes all block data associated with a hash.
 func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
