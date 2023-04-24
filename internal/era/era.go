@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/golang/snappy"
 )
@@ -282,11 +281,11 @@ func (r *Reader) Read() (*types.Block, types.Receipts, error) {
 	return block, receipts, nil
 }
 
-// ReadBlock reads the block number n from the Era1 archive.
+// ReadBlockRLP reads the block number n from the Era1 archive.
 // The method returns error if the Era1 file is malformed, the request is
 // out-of-bounds, as determined by the block index, or if the block number at
 // the calculated offset doesn't match the requested.
-func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
+func (r *Reader) ReadBlockRLP(n uint64) ([]byte, error) {
 	// Read block index metadata.
 	m, err := readMetadata(r)
 	if err != nil {
@@ -304,16 +303,25 @@ func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
 		return nil, fmt.Errorf("error reading block offset: %w", err)
 	}
 	// Read block at offset.
-	b, err := readBlockAtOffset(r, offset)
-	if b != nil && b.NumberU64() != n {
-		return nil, fmt.Errorf("malformed era, wrong block number (want %d, got %d)", n, b.NumberU64())
+	return readBlockAtOffset(r, offset)
+}
+
+// ReadBlock reads the block number n from the Era1 archive.
+func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
+	b, err := r.ReadBlockRLP(n)
+	if err != nil {
+		return nil, err
 	}
-	return b, err
+	var block types.Block
+	if err := rlp.DecodeBytes(b, &block); err != nil {
+		return nil, err
+	}
+	return &block, nil
 }
 
 // ReadBlockAndReceipts reads the block number n and associated receipts from
 // the Era1 archive.
-
+//
 // The method returns error if the Era1 file is malformed, the request is
 // out-of-bounds, as determined by the block index, or if the block number at
 // the calculated offset doesn't match the requested.
@@ -364,68 +372,68 @@ func (r *Reader) Count() (uint64, error) {
 	return m.count, err
 }
 
-func (r *Reader) Verify() error {
-	var (
-		err    error
-		want   common.Hash
-		td     *big.Int
-		tds    = make([]*big.Int, 0)
-		hashes = make([]common.Hash, 0)
-	)
-	if want, err = r.Accumulator(); err != nil {
-		return fmt.Errorf("error reading accumulator: %w", err)
-	}
-	if td, err = r.TotalDifficulty(); err != nil {
-		return fmt.Errorf("error reading total difficulty: %w", err)
-	}
+// func (r *Reader) Verify() error {
+//         var (
+//                 err    error
+//                 want   common.Hash
+//                 td     *big.Int
+//                 tds    = make([]*big.Int, 0)
+//                 hashes = make([]common.Hash, 0)
+//         )
+//         if want, err = r.Accumulator(); err != nil {
+//                 return fmt.Errorf("error reading accumulator: %w", err)
+//         }
+//         if td, err = r.TotalDifficulty(); err != nil {
+//                 return fmt.Errorf("error reading total difficulty: %w", err)
+//         }
 
-	start, err := r.Start()
-	if err != nil {
-		return fmt.Errorf("error reading start offset: %w", err)
-	}
-	// Save current block offset and replace after verifying.
-	if r.offset != nil {
-		saved := *r.offset
-		r.offset = &start
-		defer func() {
-			r.offset = &saved
-		}()
-	}
-	// Accumulate block hash and total difficulty values.
-	for block, receipts, err := r.Read(); ; block, receipts, err = r.Read() {
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return fmt.Errorf("error reading era1: %w", err)
-		}
-		// Verify ommer hash.
-		ur := types.CalcUncleHash(block.Uncles())
-		if ur != block.UncleHash() {
-			return fmt.Errorf("tx root in block %d mismatch: want %s, got %s", block.NumberU64(), block.UncleHash(), ur)
-		}
-		// Verify tx hash.
-		tr := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
-		if tr != block.TxHash() {
-			return fmt.Errorf("tx root in block %d mismatch: want %s, got %s", block.NumberU64(), block.TxHash(), tr)
-		}
-		// Verify receipt root.
-		rr := types.DeriveSha(receipts, trie.NewStackTrie(nil))
-		if rr != block.ReceiptHash() {
-			return fmt.Errorf("receipt root in block %d mismatch: want %s, got %s", block.NumberU64(), block.ReceiptHash(), rr)
-		}
-		hashes = append(hashes, block.Hash())
-		td.Add(td, block.Difficulty())
-		tds = append(tds, new(big.Int).Set(td))
-	}
-	got, err := ComputeAccumulator(hashes, tds)
-	if err != nil {
-		return fmt.Errorf("error computing accumulator: %w", err)
-	}
-	if got != want {
-		return fmt.Errorf("expected accumulator root does not match calculated: got %s, want %s", got, want)
-	}
-	return nil
-}
+//         start, err := r.Start()
+//         if err != nil {
+//                 return fmt.Errorf("error reading start offset: %w", err)
+//         }
+//         // Save current block offset and replace after verifying.
+//         if r.offset != nil {
+//                 saved := *r.offset
+//                 r.offset = &start
+//                 defer func() {
+//                         r.offset = &saved
+//                 }()
+//         }
+//         // Accumulate block hash and total difficulty values.
+//         for block, receipts, err := r.Read(); ; block, receipts, err = r.Read() {
+//                 if err == io.EOF {
+//                         break
+//                 } else if err != nil {
+//                         return fmt.Errorf("error reading era1: %w", err)
+//                 }
+//                 // Verify ommer hash.
+//                 ur := types.CalcUncleHash(block.Uncles())
+//                 if ur != block.UncleHash() {
+//                         return fmt.Errorf("tx root in block %d mismatch: want %s, got %s", block.NumberU64(), block.UncleHash(), ur)
+//                 }
+//                 // Verify tx hash.
+//                 tr := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
+//                 if tr != block.TxHash() {
+//                         return fmt.Errorf("tx root in block %d mismatch: want %s, got %s", block.NumberU64(), block.TxHash(), tr)
+//                 }
+//                 // Verify receipt root.
+//                 rr := types.DeriveSha(receipts, trie.NewStackTrie(nil))
+//                 if rr != block.ReceiptHash() {
+//                         return fmt.Errorf("receipt root in block %d mismatch: want %s, got %s", block.NumberU64(), block.ReceiptHash(), rr)
+//                 }
+//                 hashes = append(hashes, block.Hash())
+//                 td.Add(td, block.Difficulty())
+//                 tds = append(tds, new(big.Int).Set(td))
+//         }
+//         got, err := ComputeAccumulator(hashes, tds)
+//         if err != nil {
+//                 return fmt.Errorf("error computing accumulator: %w", err)
+//         }
+//         if got != want {
+//                 return fmt.Errorf("expected accumulator root does not match calculated: got %s, want %s", got, want)
+//         }
+//         return nil
+// }
 
 // seek is a shorthand method for calling seek on the inner reader.
 func (r *Reader) seek(offset int64, whence int) (int64, error) {
@@ -482,7 +490,7 @@ func readOffset(r *Reader, m metadata, n uint64) (int64, error) {
 //
 // Note that offset is relative to the current cursor location in the reader.
 // It should only be called immediately after readOffset.
-func readBlockAtOffset(r *Reader, offset int64) (*types.Block, error) {
+func readBlockAtOffset(r *Reader, offset int64) ([]byte, error) {
 	// Seek to beginning of block entry.
 	if _, err := r.r.Seek(offset, io.SeekCurrent); err != nil {
 		return nil, err
@@ -496,14 +504,11 @@ func readBlockAtOffset(r *Reader, offset int64) (*types.Block, error) {
 		return nil, fmt.Errorf("expected block entry, got %x", entry.Type)
 	}
 	// Read block.
-	var (
-		block types.Block
-		s     = snappy.NewReader(bytes.NewReader(entry.Value))
-	)
-	if err := rlp.Decode(s, &block); err != nil {
-		return nil, fmt.Errorf("error decoding block: %w", err)
+	b, err := io.ReadAll(snappy.NewReader(bytes.NewReader(entry.Value)))
+	if err != nil {
+		return nil, fmt.Errorf("error reading snappy encoded block: %w", err)
 	}
-	return &block, nil
+	return b, nil
 }
 
 // readReceipts reads a snappy encoded list of receipts.
