@@ -39,7 +39,11 @@ func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		data, _ = reader.Ancient(ChainFreezerHashTable, number)
 		if len(data) == 0 {
-			// Get it by hash from leveldb
+			// Try glacier db.
+			data, _ = db.Glacier(ChainFreezerHashTable, number)
+		}
+		if len(data) == 0 {
+			// Try key-value db.
 			data, _ = db.Get(headerHashKey(number))
 		}
 		return nil
@@ -355,7 +359,12 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 		if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
 			return nil
 		}
-		// If not, try reading from leveldb
+		// Try glacier db.
+		data, _ = db.Glacier(ChainFreezerHeaderTable, number)
+		if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
+			return nil
+		}
+		// Try key-value db.
 		data, _ = db.Get(headerKey(number, hash))
 		return nil
 	})
@@ -446,7 +455,12 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 			data, _ = reader.Ancient(ChainFreezerBodiesTable, number)
 			return nil
 		}
-		// If not, try reading from leveldb
+		// Try glacier db.
+		data, _ = db.Glacier(ChainFreezerBodiesTable, number)
+		if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
+			return nil
+		}
+		// Try key-value db.
 		data, _ = db.Get(blockBodyKey(number, hash))
 		return nil
 	})
@@ -462,9 +476,14 @@ func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
 		if len(data) > 0 {
 			return nil
 		}
-		// Block is not in ancients, read from leveldb by hash and number.
-		// Note: ReadCanonicalHash cannot be used here because it also
-		// calls ReadAncients internally.
+		// Try glacier db.
+		data, _ = db.Glacier(ChainFreezerBodiesTable, number)
+		if len(data) > 0 {
+			return nil
+		}
+		// Block is not in freezer, read from key-value db by hash and
+		// number. Note: ReadCanonicalHash cannot be used here because
+		// it also calls ReadAncients internally.
 		hash, _ := db.Get(headerHashKey(number))
 		data, _ = db.Get(blockBodyKey(number, common.BytesToHash(hash)))
 		return nil
@@ -529,7 +548,12 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 			data, _ = reader.Ancient(ChainFreezerDifficultyTable, number)
 			return nil
 		}
-		// If not, try reading from leveldb
+		// Try glacier db.
+		data, _ = db.Glacier(ChainFreezerDifficultyTable, number)
+		if len(data) > 0 {
+			return nil
+		}
+		// Try key-value db.
 		data, _ = db.Get(headerTDKey(number, hash))
 		return nil
 	})
@@ -589,7 +613,12 @@ func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawVa
 			data, _ = reader.Ancient(ChainFreezerReceiptTable, number)
 			return nil
 		}
-		// If not, try reading from leveldb
+		// Try glacier db.
+		data, _ = db.Glacier(ChainFreezerReceiptTable, number)
+		if len(data) > 0 {
+			return nil
+		}
+		// Try key-value db.
 		data, _ = db.Get(blockReceiptsKey(number, hash))
 		return nil
 	})

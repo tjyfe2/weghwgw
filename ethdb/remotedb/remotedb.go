@@ -134,6 +134,14 @@ func (db *Database) AncientDatadir() (string, error) {
 	panic("not supported")
 }
 
+func (db *Database) Glacier(kind string, number uint64) ([]byte, error) {
+	panic("not supported")
+}
+
+func (db *Database) GlacierRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
+	panic("not supported")
+}
+
 func (db *Database) Compact(start []byte, limit []byte) error {
 	return nil
 }

@@ -34,6 +34,40 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
+// glacierdb is a database wrapper that enable glacial data retrieval.
+type glacierdb struct {
+	ethdb.Database
+	ethdb.GlacierReader
+}
+
+func (db *glacierdb) Glacier(kind string, number uint64) ([]byte, error) {
+	if db.GlacierReader != nil {
+		return db.GlacierReader.Glacier(kind, number)
+	}
+	return nil, errNotSupported
+}
+
+func (db *glacierdb) GlacierRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
+	if db.GlacierReader != nil {
+		return db.GlacierReader.GlacierRange(kind, start, count, maxBytes)
+	}
+	return nil, errNotSupported
+}
+
+func (db *glacierdb) Close() error {
+	var errs []error
+	if err := db.Database.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := db.GlacierReader.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	if len(errs) != 0 {
+		return fmt.Errorf("%v", errs)
+	}
+	return nil
+}
+
 // freezerdb is a database wrapper that enabled freezer data retrievals.
 type freezerdb struct {
 	ancientRoot string
@@ -80,6 +114,14 @@ func (frdb *freezerdb) Freeze(threshold uint64) error {
 	frdb.AncientStore.(*chainFreezer).trigger <- trigger
 	<-trigger
 	return nil
+}
+
+func (frdb *freezerdb) Glacier(kind string, number uint64) ([]byte, error) {
+	return nil, errNotSupported
+}
+
+func (frdb *freezerdb) GlacierRange(kind string, number, count, maxBytes uint64) ([][]byte, error) {
+	return nil, errNotSupported
 }
 
 // nofreezedb is a database wrapper that disables freezer data retrievals.
@@ -162,6 +204,14 @@ func (db *nofreezedb) MigrateTable(kind string, convert convertLegacyFn) error {
 // AncientDatadir returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) AncientDatadir() (string, error) {
 	return "", errNotSupported
+}
+
+func (db *nofreezedb) Glacier(kind string, number uint64) ([]byte, error) {
+	return nil, errNotSupported
+}
+
+func (db *nofreezedb) GlacierRange(kind string, number, count, maxBytes uint64) ([][]byte, error) {
+	return nil, errNotSupported
 }
 
 // NewDatabase creates a high level database on top of a given key-value data
@@ -297,6 +347,10 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	}, nil
 }
 
+func NewDatabaseWithGlacier(db ethdb.KeyValueStore, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
+	return nil, nil
+}
+
 // NewMemoryDatabase creates an ephemeral in-memory key-value database without a
 // freezer moving immutable chain segments into cold storage.
 func NewMemoryDatabase() ethdb.Database {
@@ -348,6 +402,8 @@ type OpenOptions struct {
 	Type              string // "leveldb" | "pebble"
 	Directory         string // the datadir
 	AncientsDirectory string // the ancients-dir
+	GlacierDirectory  string // the glacier-dir
+	Network           string // name of network
 	Namespace         string // the namespace for database relevant metrics
 	Cache             int    // the capacity(in megabytes) of the data caching
 	Handles           int    // number of files to be open simultaneously
@@ -404,15 +460,25 @@ func Open(o OpenOptions) (ethdb.Database, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(o.AncientsDirectory) == 0 {
+	if len(o.AncientsDirectory) == 0 && len(o.GlacierDirectory) == 0 {
 		return kvdb, nil
 	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly)
-	if err != nil {
-		kvdb.Close()
-		return nil, err
+	var frdb ethdb.Database
+	if len(o.AncientsDirectory) != 0 {
+		frdb, err = NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly)
+		if err != nil {
+			kvdb.Close()
+			return nil, err
+		}
 	}
-	return frdb, nil
+	if len(o.GlacierDirectory) == 0 {
+		return frdb, nil
+	}
+	gldb, err := NewGlacier(o.GlacierDirectory, o.Network)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open glacier database: %w", err)
+	}
+	return &glacierdb{frdb, gldb}, nil
 }
 
 type counter uint64

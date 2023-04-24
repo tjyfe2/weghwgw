@@ -153,6 +153,7 @@ type AncientStater interface {
 type Reader interface {
 	KeyValueReader
 	AncientReader
+	GlacierReader
 }
 
 // Writer contains the methods required to write data to both key-value as well as
@@ -174,6 +175,13 @@ type Stater interface {
 type AncientStore interface {
 	AncientReader
 	AncientWriter
+	io.Closer
+}
+
+// GlacierReader contains the methods required
+type GlacierReader interface {
+	Glacier(kind string, number uint64) ([]byte, error)
+	GlacierRange(kind string, start, count, maxBytes uint64) ([][]byte, error)
 	io.Closer
 }
 
