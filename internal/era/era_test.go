@@ -17,70 +17,19 @@
 package era
 
 import (
-	"fmt"
-	"io"
+	"bytes"
 	"math/big"
-	"math/rand"
 	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
-func makeTestChain(blocks, maxTx, minTx int) *core.BlockChain {
-	var (
-		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		address = crypto.PubkeyToAddress(key.PublicKey)
-		genesis = &core.Genesis{
-			Config:   params.TestChainConfig,
-			GasLimit: 30_000_000,
-			Alloc:    core.GenesisAlloc{address: {Balance: big.NewInt(1000000000000000000)}},
-		}
-		signer = types.LatestSigner(genesis.Config)
-	)
-	db, b, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), blocks, func(i int, g *core.BlockGen) {
-		if i == 0 {
-			return
-		}
-		var (
-			count = minTx + (int(rand.Uint64()) % (maxTx - minTx + 1))
-			sum   = uint64(0)
-		)
-
-		for j := 0; j < count; j++ {
-			data := make([]byte, 512)
-			if _, err := rand.Read(data); err != nil {
-				panic(err)
-			}
-			gas, _ := core.IntrinsicGas(data, nil, false, true, true, true)
-			if sum > g.PrevBlock(int(g.Number().Int64())-2).GasLimit() {
-				break
-			}
-			tx, _ := types.SignNewTx(key, signer, &types.DynamicFeeTx{
-				ChainID:    genesis.Config.ChainID,
-				Nonce:      uint64(g.TxNonce(address)),
-				GasTipCap:  common.Big0,
-				GasFeeCap:  g.PrevBlock(0).BaseFee(),
-				Gas:        gas,
-				To:         &common.Address{0xaa},
-				Value:      big.NewInt(int64(i)),
-				Data:       data,
-				AccessList: nil,
-			})
-			sum += gas
-			g.AddTx(tx)
-		}
-	})
-	chain, _ := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
-	chain.InsertChain(b)
-	return chain
+type testchain struct {
+	headers  [][]byte
+	bodies   [][]byte
+	receipts [][]byte
+	tds      []*big.Int
 }
 
 func TestEra1Builder(t *testing.T) {
@@ -92,19 +41,26 @@ func TestEra1Builder(t *testing.T) {
 	defer f.Close()
 
 	var (
-		chain   = makeTestChain(128, 1, 1)
 		builder = NewBuilder(f)
+		chain   = testchain{}
 	)
+	for i := 0; i < 128; i++ {
+		chain.headers = append(chain.headers, []byte{byte('h'), byte(i)})
+		chain.bodies = append(chain.bodies, []byte{byte('b'), byte(i)})
+		chain.receipts = append(chain.receipts, []byte{byte('r'), byte(i)})
+		chain.tds = append(chain.tds, big.NewInt(int64(i)))
+	}
 
 	// Write blocks to Era1.
-	head := chain.CurrentBlock().Number.Uint64()
-	for i := uint64(0); i < head; i++ {
+	for i := 0; i < len(chain.headers); i++ {
 		var (
-			block    = chain.GetBlockByNumber(i)
-			receipts = chain.GetReceiptsByHash(block.Hash())
-			td       = chain.GetTd(block.Hash(), i)
+			header   = chain.headers[i]
+			body     = chain.bodies[i]
+			receipts = chain.receipts[i]
+			hash     = common.Hash{byte(i)}
+			td       = chain.tds[i]
 		)
-		if err := builder.Add(block, receipts, td); err != nil {
+		if err = builder.AddRLP(header, body, receipts, uint64(i), hash, td, big.NewInt(1)); err != nil {
 			t.Fatalf("error adding entry: %v", err)
 		}
 	}
@@ -116,111 +72,41 @@ func TestEra1Builder(t *testing.T) {
 
 	// Verify Era1 contents.
 	r := NewReader(f)
-	if err := r.Verify(); err != nil {
-		t.Fatalf("invalid era1: %v", err)
-	}
-	for i := uint64(0); i < head; i++ {
-		want := chain.GetBlockByNumber(i)
-		b, r, err := r.ReadBlockAndReceipts(want.NumberU64())
+	for i := uint64(0); i < uint64(len(chain.headers)); i++ {
+		// Check headers.
+		header, err := r.ReadHeaderRLP(i)
 		if err != nil {
-			t.Fatalf("error reading block from era1: %v", err)
+			t.Fatalf("error reading from era1: %v", err)
 		}
-		if want, got := want.NumberU64(), b.NumberU64(); want != got {
-			t.Fatalf("blocks out of order: want %d, got %d", want, got)
+		if !bytes.Equal(header, chain.headers[i]) {
+			t.Fatalf("mismatched header: want %s, got %s", chain.headers[i], header)
 		}
-		if want.Hash() != b.Hash() {
-			t.Fatalf("block hash mistmatch %d: want %s, got %s", want.NumberU64(), want.Hash().Hex(), b.Hash().Hex())
+
+		// Check bodies.
+		body, err := r.ReadBodyRLP(i)
+		if err != nil {
+			t.Fatalf("error reading from era1: %v", err)
 		}
-		if got := types.DeriveSha(r, trie.NewStackTrie(nil)); got != want.ReceiptHash() {
-			t.Fatalf("receipt root %d mismatch: want %s, got %s", want.NumberU64(), want.ReceiptHash(), got)
+		if !bytes.Equal(body, chain.bodies[i]) {
+			t.Fatalf("mismatched body: want %s, got %s", chain.bodies[i], body)
 		}
-	}
-}
 
-func makeEra1() (*os.File, error) {
-	f, err := os.CreateTemp("", "era1-test")
-	if err != nil {
-		return nil, fmt.Errorf("error creating temp file: %w", err)
-	}
-	var (
-		chain   = makeTestChain(128, 512, 128)
-		builder = NewBuilder(f)
-	)
-	head := chain.CurrentBlock().Number.Uint64()
-	for i := uint64(0); i < head; i++ {
-		var (
-			block    = chain.GetBlockByNumber(i)
-			receipts = chain.GetReceiptsByHash(block.Hash())
-			td       = chain.GetTd(block.Hash(), i)
-		)
-		if err := builder.Add(block, receipts, td); err != nil {
-			return nil, fmt.Errorf("error adding entry: %w", err)
+		// Check receipts.
+		receipts, err := r.ReadReceiptsRLP(i)
+		if err != nil {
+			t.Fatalf("error reading from era1: %v", err)
 		}
-	}
-	if err := builder.Finalize(); err != nil {
-		return nil, fmt.Errorf("error finalizing era1: %v", err)
-	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return nil, fmt.Errorf("seek failed")
-	}
-	return f, nil
-}
-
-var allBlocks []*types.Block
-var allReceipts []types.Receipts
-
-func BenchmarkRead(b *testing.B) {
-	f, err := makeEra1()
-	if err != nil {
-		f.Close()
-		b.Fatalf("%v", err)
-	}
-	defer f.Close()
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		r := NewReader(f)
-		for {
-			if bb, rr, err := r.Read(); err == io.EOF {
-				break
-			} else if err != nil {
-				b.Fatalf("error reading era1: %v", err)
-			} else {
-				allBlocks = append(allBlocks, bb)
-				allReceipts = append(allReceipts, rr)
-			}
+		if !bytes.Equal(receipts, chain.receipts[i]) {
+			t.Fatalf("mismatched body: want %s, got %s", chain.receipts[i], receipts)
 		}
-	}
-}
 
-func BenchmarkVerify(b *testing.B) {
-	f, err := makeEra1()
-	if err != nil {
-		f.Close()
-		b.Fatalf("%v", err)
-	}
-	defer f.Close()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		r := NewReader(f)
-		if err := r.Verify(); err != nil {
-			b.Fatalf("error verifying era1: %v", err)
+		// Check total difficulty.
+		td, err := r.ReadTotalDifficulty(i)
+		if err != nil {
+			t.Fatalf("error reading from era1: %v", err)
 		}
-	}
-}
-
-func BenchmarkHash(b *testing.B) {
-	f, err := makeEra1()
-	if err != nil {
-		f.Close()
-		b.Fatalf("%v", err)
-	}
-	defer f.Close()
-	data, _ := io.ReadAll(f)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		crypto.Keccak256(data)
+		if td.Cmp(chain.tds[i]) != 0 {
+			t.Fatalf("mismatched tds: want %s, got %s", chain.tds[i], td)
+		}
 	}
 }

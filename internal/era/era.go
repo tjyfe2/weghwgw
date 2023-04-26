@@ -27,17 +27,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
 	"github.com/ethereum/go-ethereum/rlp"
-	ssz "github.com/ferranbt/fastssz"
 	"github.com/golang/snappy"
 )
 
 var (
-	TypeVersion           uint16 = 0x3265
-	TypeCompressedBlock   uint16 = 0x03
-	TypeCompressedReceipt uint16 = 0x04
-	TypeAccumulator       uint16 = 0x05
-	TypeTotalDifficulty   uint16 = 0x06
-	TypeBlockIndex        uint16 = 0x3266
+	TypeVersion            uint16 = 0x3265
+	TypeCompressedHeader   uint16 = 0x03
+	TypeCompressedBody     uint16 = 0x04
+	TypeCompressedReceipts uint16 = 0x05
+	TypeTotalDifficulty    uint16 = 0x06
+	TypeAccumulator        uint16 = 0x07
+	TypeBlockIndex         uint16 = 0x3266
 
 	MaxEra1BatchSize = 8192
 )
@@ -48,45 +48,27 @@ func Filename(epoch int, network string) string {
 	return fmt.Sprintf("%s-%05d.era1", network, epoch)
 }
 
-// ComputeAccumulator calculates the SSZ hash tree root of the Era1
-// accumulator of header records.
-func ComputeAccumulator(hashes []common.Hash, tds []*big.Int) (common.Hash, error) {
-	if len(hashes) != len(tds) {
-		return common.Hash{}, fmt.Errorf("must have equal number hashes as td values")
-	}
-	hh := ssz.NewHasher()
-	for i := range hashes {
-		rec := headerRecord{hashes[i], tds[i]}
-		root, err := rec.HashTreeRoot()
-		if err != nil {
-			return common.Hash{}, err
-		}
-		hh.Append(root[:])
-	}
-	hh.MerkleizeWithMixin(0, uint64(len(hashes)), uint64(MaxEra1BatchSize))
-	return hh.HashRoot()
-}
-
 // Builder is used to create Era1 archives of block data.
 //
 // Era1 files are themselves e2store files. For more information on this format,
 // see https://github.com/status-im/nimbus-eth2/blob/stable/docs/e2store.md.
 //
 // The overall structure of an Era1 file follows closely the structure of an Era file
-// which contains Consensus Layer data (and as a byproduct, EL data after the merge).
+// which contains consensus Layer data (and as a byproduct, EL data after the merge).
 //
 // The structure can be summarized through this definition:
 //
-//	era1 := Version | block-tuple* | other-entries* | Accumulator | StartTD | BlockIndex
-//	block-tuple :=  CompressedBlock | CompressedReceipts
+//	era1 := Version | block-tuple* | other-entries* | Accumulator | BlockIndex
+//	block-tuple :=  CompressedHeader | CompressedBody | CompressedReceipts | TotalDifficulty
 //
 // Each basic element is its own entry:
 //
 //	Version            = { type: [0x65, 0x32], data: nil }
-//	CompressedBlock    = { type: [0x03, 0x00], data: snappyFramed(rlp(block)) }
-//	CompressedReceipts = { type: [0x04, 0x00], data: snappyFramed(rlp(receipts)) }
-//	Accumulator        = { type: [0x05, 0x00], data: hash_tree_root(blockHashes, 8192) }
-//	StartTD            = { type: [0x06, 0x00], data: uint256(startingTotalDifficulty) }
+//	CompressedHeader   = { type: [0x03, 0x00], data: snappyFramed(rlp(header)) }
+//	CompressedBody     = { type: [0x04, 0x00], data: snappyFramed(rlp(body)) }
+//	CompressedReceipts = { type: [0x05, 0x00], data: snappyFramed(rlp(receipts)) }
+//	StartTD            = { type: [0x06, 0x00], data: uint256(header.total_difficulty) }
+//	Accumulator        = { type: [0x07, 0x00], data: hash_tree_root(blockHashes, 8192) }
 //	BlockIndex         = { type: [0x32, 0x66], data: block-index }
 //
 // BlockIndex stores relative offsets to each compressed block entry. The
@@ -121,7 +103,11 @@ func NewBuilder(w io.WriteSeeker) *Builder {
 // Add writes a compressed block entry and compressed receipts entry to the
 // underlying e2store file.
 func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) error {
-	eb, err := rlp.EncodeToBytes(block)
+	eh, err := rlp.EncodeToBytes(block.Header())
+	if err != nil {
+		return err
+	}
+	eb, err := rlp.EncodeToBytes(block.Body())
 	if err != nil {
 		return err
 	}
@@ -129,12 +115,12 @@ func (b *Builder) Add(block *types.Block, receipts types.Receipts, td *big.Int) 
 	if err != nil {
 		return err
 	}
-	return b.AddRLP(eb, er, block.NumberU64(), block.Hash(), td, block.Difficulty())
+	return b.AddRLP(eh, eb, er, block.NumberU64(), block.Hash(), td, block.Difficulty())
 }
 
 // AddRLP writes a compressed block entry and compressed receipts entry to the
 // underlying e2store file.
-func (b *Builder) AddRLP(block, receipts []byte, number uint64, hash common.Hash, td, difficulty *big.Int) error {
+func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash common.Hash, td, difficulty *big.Int) error {
 	// Write Era1 version entry before first block.
 	if b.startNum == nil {
 		if err := writeVersion(b.w); err != nil {
@@ -157,33 +143,38 @@ func (b *Builder) AddRLP(block, receipts []byte, number uint64, hash common.Hash
 	b.hashes = append(b.hashes, hash)
 	b.tds = append(b.tds, td)
 
-	// Write block.
-	var (
-		buf = bytes.NewBuffer(nil)
-		s   = snappy.NewBufferedWriter(buf)
-	)
-	if _, err := s.Write(block); err != nil {
-		return fmt.Errorf("error snappy encoding block: %w", err)
-	}
-	if err := s.Flush(); err != nil {
-		return fmt.Errorf("error flushing snappy encoding block: %w", err)
-	}
-	_, err = b.w.Write(TypeCompressedBlock, buf.Bytes())
-	if err != nil {
-		return err
+	// Small helper to take care snappy encoding and writing e2store entry.
+	snappyWrite := func(typ uint16, in []byte) error {
+		var (
+			buf = bytes.NewBuffer(nil)
+			s   = snappy.NewBufferedWriter(buf)
+		)
+		if _, err := s.Write(in); err != nil {
+			return fmt.Errorf("error snappy encoding: %w", err)
+		}
+		if err := s.Flush(); err != nil {
+			return fmt.Errorf("error flushing snappy encoding: %w", err)
+		}
+		_, err = b.w.Write(typ, buf.Bytes())
+		if err != nil {
+			return fmt.Errorf("error writing e2store entry: %w", err)
+		}
+		return nil
 	}
 
-	// Write receipts.
-	buf.Reset()
-	s.Reset(buf)
-	if _, err := s.Write(receipts); err != nil {
-		return fmt.Errorf("error snappy encoding receipts: %w", err)
+	// Write block data.
+	if err := snappyWrite(TypeCompressedHeader, header); err != nil {
+		return err
 	}
-	if err := s.Flush(); err != nil {
-		return fmt.Errorf("error flushing snappy encoding block: %w", err)
+	if err := snappyWrite(TypeCompressedBody, body); err != nil {
+		return err
 	}
-	_, err = b.w.Write(TypeCompressedReceipt, buf.Bytes())
-	if err != nil {
+	if err := snappyWrite(TypeCompressedReceipts, receipts); err != nil {
+		return err
+	}
+	// Also write total difficulty, but don't snappy encode.
+	btd := bigToBytes32(td)
+	if _, err := b.w.Write(TypeTotalDifficulty, btd[:]); err != nil {
 		return err
 	}
 
@@ -204,13 +195,6 @@ func (b *Builder) Finalize() error {
 	if _, err := b.w.Write(TypeAccumulator, root[:]); err != nil {
 		return fmt.Errorf("error writing accumulator: %w", err)
 	}
-
-	// Write initial total difficulty.
-	td := bigToBytes32(b.startTd)
-	if _, err := b.w.Write(TypeTotalDifficulty, td[:]); err != nil {
-		return fmt.Errorf("error writing total difficulty: %w", err)
-	}
-
 	// Get beginning of index entry to calculate block relative offset.
 	base, err := b.w.CurrentOffset()
 	if err != nil {
@@ -255,82 +239,198 @@ func writeVersion(w *e2store.Writer) error {
 // Reader reads an Era1 archive.
 // See Builder documentation for a detailed explanation of the Era1 format.
 type Reader struct {
-	r      io.ReadSeeker
-	offset *uint64
+	r        io.ReadSeeker
+	offset   uint64
+	metadata *metadata
 }
 
 // NewReader returns a new Reader instance.
 func NewReader(r io.ReadSeeker) *Reader {
+	// qq: does it make more sense to read the metadata here and
+	//     potentially return error?
 	return &Reader{r: r}
+}
+
+// loadMetadata reads the block index metadata and sets the coresponding values
+// in Reader.
+func (r *Reader) loadMetadata() error {
+	m, err := readMetadata(r)
+	if err != nil {
+		return err
+	}
+	r.metadata = &m
+	r.offset = m.start
+	return nil
+}
+
+// readOffset reads a specific block's offset from the block index. The value n
+// is the absolute block number desired. It is normalized against the index's
+// start block.
+func (r *Reader) readOffset(n uint64) (int64, error) {
+	// Seek to the encoding of the block's offset.
+	var (
+		firstIndex  = -8 - int64(r.metadata.count)*8 // size of count - index entries
+		indexOffset = int64(n-r.metadata.start) * 8  // desired index * size of indexes
+	)
+	if _, err := r.r.Seek(firstIndex+indexOffset, io.SeekEnd); err != nil {
+		return 0, err
+	}
+	// Read the block's offset.
+	var offset int64
+	if err := binary.Read(r.r, binary.LittleEndian, &offset); err != nil {
+		return 0, err
+	}
+	return offset, nil
 }
 
 // Read reads one (block, receipts) tuple from an Era1 archive.
 func (r *Reader) Read() (*types.Block, types.Receipts, error) {
-	if r.offset == nil {
-		m, err := readMetadata(r)
-		if err != nil {
+	if r.metadata == nil {
+		if err := r.loadMetadata(); err != nil {
 			return nil, nil, err
 		}
-		r.offset = &m.start
 	}
-	block, receipts, err := r.ReadBlockAndReceipts(*r.offset)
+	block, receipts, err := r.ReadBlockAndReceipts(r.offset)
 	if err != nil {
 		return nil, nil, err
 	}
-	*r.offset += 1
+	r.offset += 1
 	return block, receipts, nil
 }
 
-// ReadBlockRLP reads the block number n from the Era1 archive.
-// The method returns error if the Era1 file is malformed, the request is
-// out-of-bounds, as determined by the block index, or if the block number at
-// the calculated offset doesn't match the requested.
-func (r *Reader) ReadBlockRLP(n uint64) ([]byte, error) {
-	// Read block index metadata.
-	m, err := readMetadata(r)
-	if err != nil {
-		return nil, fmt.Errorf("error reading index: %w", err)
+// ReadHeader reads the header number n RLP.
+func (r *Reader) ReadHeaderRLP(n uint64) ([]byte, error) {
+	if r.metadata == nil {
+		if err := r.loadMetadata(); err != nil {
+			return nil, err
+		}
 	}
 	// Determine if the request can served by current the Era1 file, e.g. n
 	// must be within the range of blocks specified in the block index
 	// metadata.
-	if n < m.start || m.start+m.count < n {
-		return nil, fmt.Errorf("request out-of-bounds: want %d, start: %d, count: %d", n, m.start, m.count)
+	if n < r.metadata.start || r.metadata.start+r.metadata.count < n {
+		return nil, fmt.Errorf("request out-of-bounds: want %d, start: %d, count: %d", n, r.metadata.start, r.metadata.count)
 	}
 	// Read the specified block's offset from the block index.
-	offset, err := readOffset(r, m, n)
+	offset, err := r.readOffset(n)
 	if err != nil {
 		return nil, fmt.Errorf("error reading block offset: %w", err)
 	}
-	// Read block at offset.
-	return readBlockAtOffset(r, offset)
-}
-
-// ReadBlock reads the block number n from the Era1 archive.
-func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
-	b, err := r.ReadBlockRLP(n)
+	if _, err := r.r.Seek(offset, io.SeekCurrent); err != nil {
+		return nil, err
+	}
+	// Read header.
+	entry, err := e2store.NewReader(r.r).Read()
 	if err != nil {
 		return nil, err
 	}
-	var block types.Block
-	if err := rlp.DecodeBytes(b, &block); err != nil {
-		return nil, err
+	if entry.Type != TypeCompressedHeader {
+		return nil, fmt.Errorf("expected header entry, got %x", entry.Type)
 	}
-	return &block, nil
+	return io.ReadAll(snappy.NewReader(bytes.NewReader(entry.Value)))
 }
 
-// ReadBlockAndReceipts reads the block number n and associated receipts from
-// the Era1 archive.
-//
-// The method returns error if the Era1 file is malformed, the request is
-// out-of-bounds, as determined by the block index, or if the block number at
-// the calculated offset doesn't match the requested.
+// ReadBodyRLP reads the block body number n RLP.
+func (r *Reader) ReadBodyRLP(n uint64) ([]byte, error) {
+	// Orient cursor.
+	_, err := r.ReadHeaderRLP(n)
+	if err != nil {
+		return nil, err
+	}
+	// Read body.
+	entry, err := e2store.NewReader(r.r).Read()
+	if err != nil {
+		return nil, err
+	}
+	if entry.Type != TypeCompressedBody {
+		return nil, fmt.Errorf("expected body entry, got %x", entry.Type)
+	}
+	return io.ReadAll(snappy.NewReader(bytes.NewReader(entry.Value)))
+}
+
+// ReadReceiptsRLP reads the receipts RLP associated with number n.
+func (r *Reader) ReadReceiptsRLP(n uint64) ([]byte, error) {
+	// Orient cursor.
+	_, err := r.ReadBodyRLP(n)
+	if err != nil {
+		return nil, err
+	}
+	// Read receipts.
+	entry, err := e2store.NewReader(r.r).Read()
+	if err != nil {
+		return nil, err
+	}
+	if entry.Type != TypeCompressedReceipts {
+		return nil, fmt.Errorf("expected receipts entry, got %x", entry.Type)
+	}
+	return io.ReadAll(snappy.NewReader(bytes.NewReader(entry.Value)))
+}
+
+// ReadTotalDifficulty reads the total difficulty of block number n.
+func (r *Reader) ReadTotalDifficulty(n uint64) (*big.Int, error) {
+	// Orient cursor.
+	_, err := r.ReadReceiptsRLP(n)
+	if err != nil {
+		return nil, err
+	}
+	// Read totaly difficulty.
+	entry, err := e2store.NewReader(r.r).Read()
+	if err != nil {
+		return nil, err
+	}
+	if entry.Type != TypeTotalDifficulty {
+		return nil, fmt.Errorf("expected total difficulty entry, got %x", entry.Type)
+	}
+	return new(big.Int).SetBytes(reverseOrder(entry.Value)), nil
+}
+
+// ReadHeader reads the header number n.
+func (r *Reader) ReadHeader(n uint64) (*types.Header, error) {
+	h, err := r.ReadHeaderRLP(n)
+	if err != nil {
+		return nil, err
+	}
+	var header types.Header
+	if err := rlp.DecodeBytes(h, &header); err != nil {
+		return nil, err
+	}
+	return &header, nil
+}
+
+// ReadBlock reads the block number n.
+func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
+	header, err := r.ReadHeader(n)
+	if err != nil {
+		return nil, err
+	}
+	b, err := r.ReadBodyRLP(n)
+	if err != nil {
+		return nil, err
+	}
+	var body types.Body
+	if err := rlp.DecodeBytes(b, &header); err != nil {
+		return nil, err
+	}
+	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles), nil
+}
+
+// ReadBlockAndReceipts reads the block number n and associated receipts.
 func (r *Reader) ReadBlockAndReceipts(n uint64) (*types.Block, types.Receipts, error) {
+	// Read block.
 	block, err := r.ReadBlock(n)
 	if err != nil {
 		return nil, nil, err
 	}
-	receipts, err := readReceipts(r)
+	// Read receipts.
+	rr, err := r.ReadReceiptsRLP(n)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Decode receipts.
+	var receipts types.Receipts
+	if err := rlp.DecodeBytes(rr, &receipts); err != nil {
+		return nil, nil, err
+	}
 	return block, receipts, err
 }
 
@@ -347,17 +447,28 @@ func (r *Reader) Accumulator() (common.Hash, error) {
 	return common.BytesToHash(entry.Value), nil
 }
 
-// TotalDifficulty reads the total difficulty entry in the Era1 file.
-func (r *Reader) TotalDifficulty() (*big.Int, error) {
+// InitialTD returns initial total difficulty before the difficulty of the
+// first block of the Era1 is applied.
+func (r *Reader) InitialTD() (*big.Int, error) {
 	_, err := r.seek(0, io.SeekStart)
 	if err != nil {
 		return nil, err
 	}
+	start, err := r.Start()
+	if err != nil {
+		return nil, err
+	}
+	h, err := r.ReadHeader(start)
+	if err != nil {
+		return nil, err
+	}
+	// Above seek also sets reader so next TD entry will be for this block.
 	entry, err := e2store.NewReader(r.r).Find(TypeTotalDifficulty)
 	if err != nil {
 		return nil, err
 	}
-	return new(big.Int).SetBytes(reverseOrder(entry.Value)), nil
+	td := new(big.Int).SetBytes(reverseOrder(entry.Value))
+	return td.Sub(td, h.Difficulty), nil
 }
 
 // Start returns the listed start block.
@@ -371,69 +482,6 @@ func (r *Reader) Count() (uint64, error) {
 	m, err := readMetadata(r)
 	return m.count, err
 }
-
-// func (r *Reader) Verify() error {
-//         var (
-//                 err    error
-//                 want   common.Hash
-//                 td     *big.Int
-//                 tds    = make([]*big.Int, 0)
-//                 hashes = make([]common.Hash, 0)
-//         )
-//         if want, err = r.Accumulator(); err != nil {
-//                 return fmt.Errorf("error reading accumulator: %w", err)
-//         }
-//         if td, err = r.TotalDifficulty(); err != nil {
-//                 return fmt.Errorf("error reading total difficulty: %w", err)
-//         }
-
-//         start, err := r.Start()
-//         if err != nil {
-//                 return fmt.Errorf("error reading start offset: %w", err)
-//         }
-//         // Save current block offset and replace after verifying.
-//         if r.offset != nil {
-//                 saved := *r.offset
-//                 r.offset = &start
-//                 defer func() {
-//                         r.offset = &saved
-//                 }()
-//         }
-//         // Accumulate block hash and total difficulty values.
-//         for block, receipts, err := r.Read(); ; block, receipts, err = r.Read() {
-//                 if err == io.EOF {
-//                         break
-//                 } else if err != nil {
-//                         return fmt.Errorf("error reading era1: %w", err)
-//                 }
-//                 // Verify ommer hash.
-//                 ur := types.CalcUncleHash(block.Uncles())
-//                 if ur != block.UncleHash() {
-//                         return fmt.Errorf("tx root in block %d mismatch: want %s, got %s", block.NumberU64(), block.UncleHash(), ur)
-//                 }
-//                 // Verify tx hash.
-//                 tr := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
-//                 if tr != block.TxHash() {
-//                         return fmt.Errorf("tx root in block %d mismatch: want %s, got %s", block.NumberU64(), block.TxHash(), tr)
-//                 }
-//                 // Verify receipt root.
-//                 rr := types.DeriveSha(receipts, trie.NewStackTrie(nil))
-//                 if rr != block.ReceiptHash() {
-//                         return fmt.Errorf("receipt root in block %d mismatch: want %s, got %s", block.NumberU64(), block.ReceiptHash(), rr)
-//                 }
-//                 hashes = append(hashes, block.Hash())
-//                 td.Add(td, block.Difficulty())
-//                 tds = append(tds, new(big.Int).Set(td))
-//         }
-//         got, err := ComputeAccumulator(hashes, tds)
-//         if err != nil {
-//                 return fmt.Errorf("error computing accumulator: %w", err)
-//         }
-//         if got != want {
-//                 return fmt.Errorf("expected accumulator root does not match calculated: got %s, want %s", got, want)
-//         }
-//         return nil
-// }
 
 // seek is a shorthand method for calling seek on the inner reader.
 func (r *Reader) seek(offset int64, whence int) (int64, error) {
@@ -464,117 +512,4 @@ func readMetadata(r *Reader) (m metadata, err error) {
 		return
 	}
 	return
-}
-
-// readOffset reads a specific block's offset from the block index. The value n
-// is the absolute block number desired. It is normalized against the index's
-// start block.
-func readOffset(r *Reader, m metadata, n uint64) (int64, error) {
-	// Seek to the encoding of the block's offset.
-	var (
-		firstIndex  = -8 - int64(m.count)*8 // size of count - index entries
-		indexOffset = int64(n-m.start) * 8  // desired index * size of indexes
-	)
-	if _, err := r.r.Seek(firstIndex+indexOffset, io.SeekEnd); err != nil {
-		return 0, err
-	}
-	// Read the block's offset.
-	var offset int64
-	if err := binary.Read(r.r, binary.LittleEndian, &offset); err != nil {
-		return 0, err
-	}
-	return offset, nil
-}
-
-// readBlockAtOffset reads a snappy encoded block at the specified offset.
-//
-// Note that offset is relative to the current cursor location in the reader.
-// It should only be called immediately after readOffset.
-func readBlockAtOffset(r *Reader, offset int64) ([]byte, error) {
-	// Seek to beginning of block entry.
-	if _, err := r.r.Seek(offset, io.SeekCurrent); err != nil {
-		return nil, err
-	}
-	// Read e2store entry.
-	entry, err := e2store.NewReader(r.r).Read()
-	if err != nil {
-		return nil, err
-	}
-	if entry.Type != TypeCompressedBlock {
-		return nil, fmt.Errorf("expected block entry, got %x", entry.Type)
-	}
-	// Read block.
-	b, err := io.ReadAll(snappy.NewReader(bytes.NewReader(entry.Value)))
-	if err != nil {
-		return nil, fmt.Errorf("error reading snappy encoded block: %w", err)
-	}
-	return b, nil
-}
-
-// readReceipts reads a snappy encoded list of receipts.
-//
-// Note, this method expects the file cursor to be located at the beginning of
-// the e2store entry for the receipts, and so it should generally be called
-// after readBlockAtOffset.
-func readReceipts(r *Reader) (types.Receipts, error) {
-	// Read e2store entry.
-	entry, err := e2store.NewReader(r.r).Read()
-	if err != nil {
-		return nil, err
-	}
-	if entry.Type != TypeCompressedReceipt {
-		return nil, fmt.Errorf("expected receipts entry, got %x", entry.Type)
-	}
-	// Read receipts.
-	var (
-		receipts types.Receipts
-		s        = snappy.NewReader(bytes.NewReader(entry.Value))
-	)
-	if err := rlp.Decode(s, &receipts); err != nil {
-		return nil, fmt.Errorf("error decoding block: %w", err)
-	}
-	return receipts, nil
-}
-
-// headerRecord is an individual record for a historical header.
-//
-// See https://github.com/ethereum/portal-network-specs/blob/master/history-network.md#the-header-accumulator
-// for more information.
-type headerRecord struct {
-	Hash            common.Hash
-	TotalDifficulty *big.Int
-}
-
-// GetTree completes the ssz.HashRoot interface, but is unused.
-func (h *headerRecord) GetTree() (*ssz.Node, error) {
-	return nil, nil
-}
-
-// HashTreeRoot ssz hashes the headerRecord object.
-func (h *headerRecord) HashTreeRoot() ([32]byte, error) {
-	return ssz.HashWithDefaultHasher(h)
-}
-
-// HashTreeRootWith ssz hashes the headerRecord object with a hasher.
-func (h *headerRecord) HashTreeRootWith(hh ssz.HashWalker) (err error) {
-	hh.PutBytes(h.Hash[:])
-	td := bigToBytes32(h.TotalDifficulty)
-	hh.PutBytes(td[:])
-	hh.Merkleize(0)
-	return
-}
-
-// bigToBytes32 converts a big.Int into a little-endian 32-byte array.
-func bigToBytes32(n *big.Int) (b [32]byte) {
-	n.FillBytes(b[:])
-	reverseOrder(b[:])
-	return
-}
-
-// reverseOrder reverses the byte order of a slice.
-func reverseOrder(b []byte) []byte {
-	for i := 0; i < 16; i++ {
-		b[i], b[32-i-1] = b[32-i-1], b[i]
-	}
-	return b
 }
