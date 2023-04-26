@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -109,30 +110,39 @@ func (g *GlacierStore) GlacierRange(kind string, start, count, maxBytes uint64) 
 		)
 		switch kind {
 		case ChainFreezerHeaderTable:
-			block, err := g.eras[index].ReadBlock(number)
+			header, err := g.eras[index].ReadHeaderRLP(number)
 			if err != nil {
 				return nil, fmt.Errorf("error reading header %d from era %d: %w", number, index, err)
 			}
-			b, _ := rlp.EncodeToBytes(block.Header())
-			items = append(items, b)
+			items = append(items, header)
 		case ChainFreezerHashTable:
-			// TODO
+			header, err := g.eras[index].ReadHeaderRLP(number)
+			if err != nil {
+				return nil, fmt.Errorf("error reading header %d from era %d: %w", number, index, err)
+			}
+			items = append(items, crypto.Keccak256(header))
 		case ChainFreezerBodiesTable:
-			block, err := g.eras[index].ReadBlock(number)
+			body, err := g.eras[index].ReadBodyRLP(number)
 			if err != nil {
 				return nil, fmt.Errorf("error reading body %d from era %d: %w", number, index, err)
 			}
-			b, _ := rlp.EncodeToBytes(block.Body())
-			items = append(items, b)
+			items = append(items, body)
 		case ChainFreezerReceiptTable:
-			_, receipts, err := g.eras[index].ReadBlockAndReceipts(number)
+			receipts, err := g.eras[index].ReadReceiptsRLP(number)
 			if err != nil {
-				return nil, fmt.Errorf("error reading body %d from era %d: %w", number, index, err)
+				return nil, fmt.Errorf("error reading receipts %d from era %d: %w", number, index, err)
 			}
-			b, _ := rlp.EncodeToBytes(receipts)
-			items = append(items, b)
+			items = append(items, receipts)
 		case ChainFreezerDifficultyTable:
-			// TODO
+			td, err := g.eras[index].ReadTotalDifficulty(number)
+			if err != nil {
+				return nil, fmt.Errorf("error reading difficulty %d from era %d: %w", number, index, err)
+			}
+			enc, err := rlp.EncodeToBytes(td)
+			if err != nil {
+				return nil, fmt.Errorf("error encoding td: %w", err)
+			}
+			items = append(items, enc)
 		default:
 			return nil, nil
 		}
