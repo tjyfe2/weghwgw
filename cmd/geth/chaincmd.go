@@ -390,7 +390,7 @@ func exportChain(ctx *cli.Context) error {
 
 func importHistory(ctx *cli.Context) error {
 	if ctx.Args().Len() != 1 {
-		utils.Fatalf(ctx.App.Usage)
+		utils.Fatalf(ctx.Command.Usage)
 	}
 
 	stack, _ := makeConfigNode(ctx)
@@ -431,8 +431,8 @@ func importHistory(ctx *cli.Context) error {
 // exportHistory exports chain history in Era archives at a specified
 // directory.
 func exportHistory(ctx *cli.Context) error {
-	if ctx.Args().Len() != 4 {
-		utils.Fatalf("This command requires an argument.")
+	if ctx.Args().Len() != 3 {
+		utils.Fatalf(ctx.Command.Usage)
 	}
 
 	stack, _ := makeConfigNode(ctx)
