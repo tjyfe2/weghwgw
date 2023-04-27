@@ -457,7 +457,7 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 		}
 		// Try glacier db.
 		data, _ = db.Glacier(ChainFreezerBodiesTable, number)
-		if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
+		if len(data) > 0 {
 			return nil
 		}
 		// Try key-value db.

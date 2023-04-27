@@ -40,7 +40,7 @@ func NewGlacier(datadir, network string) (*GlacierStore, error) {
 		eras  = make(map[uint32]*era.Reader)
 	)
 	for ; ; i++ {
-		f, err := os.Open(path.Join(era.Filename(int(i), network)))
+		f, err := os.Open(path.Join(datadir, era.Filename(int(i), network)))
 		if os.IsNotExist(err) && i != 0 {
 			break
 		} else if err != nil {
@@ -51,11 +51,11 @@ func NewGlacier(datadir, network string) (*GlacierStore, error) {
 	}
 
 	// Get head block by finding last block in last read era (start+count).
-	start, err := eras[i].Start()
+	start, err := eras[i-1].Start()
 	if err != nil {
 		return nil, fmt.Errorf("error reading era %d: %w", i, err)
 	}
-	count, err := eras[i].Count()
+	count, err := eras[i-1].Count()
 	if err != nil {
 		return nil, fmt.Errorf("error reading era %d: %w", i, err)
 	}
@@ -96,7 +96,7 @@ func (g *GlacierStore) Glacier(kind string, number uint64) ([]byte, error) {
 
 func (g *GlacierStore) GlacierRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	if start < g.tail || start+count > g.head {
-		return nil, nil
+		return nil, errOutOfBounds
 	}
 	var (
 		items      [][]byte

@@ -23,12 +23,14 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
+	"path"
 	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
@@ -494,6 +496,50 @@ func TestAncientStorage(t *testing.T) {
 	if blob := ReadTdRLP(db, fakeHash, number); len(blob) != 0 {
 		t.Fatalf("invalid td returned")
 	}
+}
+
+func TestGlacierStorage(t *testing.T) {
+	gldir := t.TempDir()
+
+	var hash common.Hash
+	{
+		f, _ := os.Create(path.Join(gldir, era.Filename(0, "mainnet")))
+		defer f.Close()
+		b := era.NewBuilder(f)
+
+		var (
+			header   = []byte{byte('h')}
+			body     = []byte{byte('b')}
+			receipts = []byte{byte('r')}
+		)
+		hash = common.BytesToHash(crypto.Keccak256(header))
+		if err := b.AddRLP(header, body, receipts, 0, hash, big.NewInt(42), big.NewInt(1)); err != nil {
+			t.Fatalf("error adding block to era: %v", err)
+		}
+		if err := b.Finalize(); err != nil {
+			t.Fatalf("error finializing era: %v", err)
+		}
+	}
+
+	db, err := NewDatabaseWithGlacier(NewMemoryDatabase(), gldir, "mainnet")
+	if err != nil {
+		t.Fatalf("failed to create database with glacier backend: %v", err)
+	}
+
+	hash, number := hash, uint64(0)
+	if blob := ReadHeaderRLP(db, hash, number); len(blob) == 0 {
+		t.Fatalf("invalid header returned")
+	}
+	if blob := ReadBodyRLP(db, hash, number); len(blob) == 0 {
+		t.Fatalf("invalid body returned")
+	}
+	if blob := ReadReceiptsRLP(db, hash, number); len(blob) == 0 {
+		t.Fatalf("invalid receipts returned")
+	}
+	if blob := ReadTdRLP(db, hash, number); len(blob) == 0 {
+		t.Fatalf("invalid td returned")
+	}
+
 }
 
 func TestCanonicalHashIteration(t *testing.T) {

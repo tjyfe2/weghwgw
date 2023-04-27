@@ -347,8 +347,12 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	}, nil
 }
 
-func NewDatabaseWithGlacier(db ethdb.KeyValueStore, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
-	return nil, nil
+func NewDatabaseWithGlacier(db ethdb.Database, glacier, network string) (ethdb.Database, error) {
+	gldb, err := NewGlacier(glacier, network)
+	if err != nil {
+		return nil, err
+	}
+	return &glacierdb{db, gldb}, nil
 }
 
 // NewMemoryDatabase creates an ephemeral in-memory key-value database without a
@@ -463,22 +467,23 @@ func Open(o OpenOptions) (ethdb.Database, error) {
 	if len(o.AncientsDirectory) == 0 && len(o.GlacierDirectory) == 0 {
 		return kvdb, nil
 	}
-	var frdb ethdb.Database
+	db := kvdb
 	if len(o.AncientsDirectory) != 0 {
-		frdb, err = NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly)
+		frdb, err := NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly)
 		if err != nil {
 			kvdb.Close()
 			return nil, err
 		}
+		db = frdb
 	}
 	if len(o.GlacierDirectory) == 0 {
-		return frdb, nil
+		return db, nil
 	}
-	gldb, err := NewGlacier(o.GlacierDirectory, o.Network)
+	gldb, err := NewDatabaseWithGlacier(db, o.GlacierDirectory, o.Network)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open glacier database: %w", err)
 	}
-	return &glacierdb{frdb, gldb}, nil
+	return gldb, nil
 }
 
 type counter uint64
