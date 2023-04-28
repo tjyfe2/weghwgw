@@ -67,9 +67,15 @@ func Filename(epoch int, network string) string {
 //	CompressedHeader   = { type: [0x03, 0x00], data: snappyFramed(rlp(header)) }
 //	CompressedBody     = { type: [0x04, 0x00], data: snappyFramed(rlp(body)) }
 //	CompressedReceipts = { type: [0x05, 0x00], data: snappyFramed(rlp(receipts)) }
-//	StartTD            = { type: [0x06, 0x00], data: uint256(header.total_difficulty) }
-//	Accumulator        = { type: [0x07, 0x00], data: hash_tree_root(blockHashes, 8192) }
+//	TotalDifficulty    = { type: [0x06, 0x00], data: uint256(header.total_difficulty) }
+//	Accumulator        = { type: [0x07, 0x00], data: accumulator-root }
 //	BlockIndex         = { type: [0x32, 0x66], data: block-index }
+//
+// Accumulator is computed by constructing an SSZ list of header-records of length at most
+// 8192 and then calculating the hash_tree_root of that list.
+//
+//	header-record := { block-hash: Bytes32, total-difficulty: Uint256 }
+//	accumulator   := hash_tree_root([]header-record, 8192)
 //
 // BlockIndex stores relative offsets to each compressed block entry. The
 // format is:
