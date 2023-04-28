@@ -44,8 +44,8 @@ var (
 
 // Filename returns a recognizable Era1-formatted file name for the specified
 // epoch and network.
-func Filename(epoch int, network string) string {
-	return fmt.Sprintf("%s-%05d.era1", network, epoch)
+func Filename(network string, epoch int, root common.Hash) string {
+	return fmt.Sprintf("%s-%05d-%s.era1", network, epoch, root.Hex()[2:10])
 }
 
 // Builder is used to create Era1 archives of block data.
@@ -188,19 +188,19 @@ func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash comm
 
 // Finalize computes the accumulator and block index values, then writes the
 // corresponding e2store entries.
-func (b *Builder) Finalize() error {
+func (b *Builder) Finalize() (common.Hash, error) {
 	if b.startNum == nil {
-		return fmt.Errorf("finalize called on empty builder")
+		return common.Hash{}, fmt.Errorf("finalize called on empty builder")
 	}
 	// Compute accumulator root and write entry.
 	root, err := ComputeAccumulator(b.hashes, b.tds)
 	if err != nil {
-		return fmt.Errorf("error calculating accumulator root: %w", err)
+		return common.Hash{}, fmt.Errorf("error calculating accumulator root: %w", err)
 	}
 	n, err := b.w.Write(TypeAccumulator, root[:])
 	b.written += n
 	if err != nil {
-		return fmt.Errorf("error writing accumulator: %w", err)
+		return common.Hash{}, fmt.Errorf("error writing accumulator: %w", err)
 	}
 	// Get beginning of index entry to calculate block relative offset.
 	base := int64(b.written + (3 * 8)) // skip e2store header (type, length) and start block
@@ -227,10 +227,10 @@ func (b *Builder) Finalize() error {
 
 	// Finally, write the block index entry.
 	if _, err := b.w.Write(TypeBlockIndex, index); err != nil {
-		return fmt.Errorf("unable to write block index: %w", err)
+		return common.Hash{}, fmt.Errorf("unable to write block index: %w", err)
 	}
 
-	return nil
+	return root, nil
 }
 
 // writeVersion writes a version entry to e2store.

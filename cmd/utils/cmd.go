@@ -257,7 +257,8 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 		// Read entire Era1 to memory. Max historical Era1 is around
 		// 600MB. This is a lot to load at once, but it speeds up the
 		// import substantially.
-		b, err := os.ReadFile(path.Join(dir, era.Filename(i, network)))
+		// b, err := os.ReadFile(path.Join(dir, era.Filename(i, network)))
+		b, err := os.ReadFile(dir)
 		if os.IsNotExist(err) {
 			break
 		} else if err != nil {
@@ -401,14 +402,11 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 	for i := uint64(0); i <= last; i += step {
 		gen := func() error {
 			// Open file for Era.
-			fn := path.Join(dir, era.Filename(int(i/step), network))
-			fh, err := os.Create(fn)
-			if err != nil {
-				return err
-			}
-			defer fh.Close()
 
-			w := era.NewBuilder(fh)
+			var (
+				buf = bytes.NewBuffer(nil)
+				w   = era.NewBuilder(buf)
+			)
 			for j := uint64(0); j < step && j <= last-i; j++ {
 				nr := i + j
 				block := bc.GetBlockByNumber(nr)
@@ -427,19 +425,19 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 					return err
 				}
 			}
-			if err := w.Finalize(); err != nil {
-				return fmt.Errorf("export failed to finalize %s: %w", fn, err)
+			root, err := w.Finalize()
+			if err != nil {
+				return fmt.Errorf("export failed to finalize %d: %w", step/i, err)
 			}
 
-			// Compute checksum of Era.
-			if _, err := fh.Seek(0, io.SeekStart); err != nil {
+			// Compute checksum of entire Era1.
+			checksums = append(checksums, common.Hash(sha256.Sum256(buf.Bytes())).Hex())
+
+			// Write Era1 to disk.
+			filename := path.Join(dir, era.Filename(network, int(i/step), root))
+			if err := os.WriteFile(filename, buf.Bytes(), os.ModePerm); err != nil {
 				return err
 			}
-			b, err := io.ReadAll(fh)
-			if err != nil {
-				return err
-			}
-			checksums = append(checksums, common.Hash(sha256.Sum256(b)).Hex())
 
 			if time.Since(reported) >= 8*time.Second {
 				log.Info("Exporting blocks", "exported", i, "elapsed", common.PrettyDuration(time.Since(start)))

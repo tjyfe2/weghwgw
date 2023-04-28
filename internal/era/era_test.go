@@ -66,7 +66,7 @@ func TestEra1Builder(t *testing.T) {
 	}
 
 	// Finalize Era1.
-	if err := builder.Finalize(); err != nil {
+	if _, err := builder.Finalize(); err != nil {
 		t.Fatalf("error finalizing era1: %v", err)
 	}
 
@@ -107,6 +107,23 @@ func TestEra1Builder(t *testing.T) {
 		}
 		if td.Cmp(chain.tds[i]) != 0 {
 			t.Fatalf("mismatched tds: want %s, got %s", chain.tds[i], td)
+		}
+	}
+}
+
+func TestEraFilename(t *testing.T) {
+	for i, tt := range []struct {
+		network  string
+		epoch    int
+		root     common.Hash
+		expected string
+	}{
+		{"mainnet", 1, common.Hash{1}, "mainnet-00001-01000000.era1"},
+		{"goerli", 99999, common.HexToHash("0xdeadbeef00000000000000000000000000000000000000000000000000000000"), "goerli-99999-deadbeef.era1"},
+	} {
+		got := Filename(tt.network, tt.epoch, tt.root)
+		if tt.expected != got {
+			t.Errorf("test %d: invalid filename: want %s, got %s", i, tt.expected, got)
 		}
 	}
 }
