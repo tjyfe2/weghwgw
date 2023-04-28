@@ -33,11 +33,11 @@ type Entry struct {
 // For more information on this format, see
 // https://github.com/status-im/nimbus-eth2/blob/stable/docs/e2store.md
 type Writer struct {
-	w io.WriteSeeker
+	w io.Writer
 }
 
 // NewWriter returns a new Writer that writes to w.
-func NewWriter(w io.WriteSeeker) *Writer {
+func NewWriter(w io.Writer) *Writer {
 	return &Writer{w}
 }
 
@@ -63,11 +63,6 @@ func (w *Writer) Write(typ uint16, b []byte) (int, error) {
 	copy(buf[8:], b)
 
 	return w.w.Write(buf)
-}
-
-// CurrentOffset returns the current offset of the underlying writer.
-func (w *Writer) CurrentOffset() (int64, error) {
-	return w.w.Seek(0, io.SeekCurrent)
 }
 
 // A Reader reads entries from an e2store-encoded file.

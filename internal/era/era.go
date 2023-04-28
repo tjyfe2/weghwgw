@@ -95,10 +95,11 @@ type Builder struct {
 	indexes  []uint64
 	hashes   []common.Hash
 	tds      []*big.Int
+	written  int
 }
 
 // NewBuilder returns a new Builder instance.
-func NewBuilder(w io.WriteSeeker) *Builder {
+func NewBuilder(w io.Writer) *Builder {
 	return &Builder{
 		w:      e2store.NewWriter(w),
 		hashes: make([]common.Hash, 0),
@@ -140,12 +141,7 @@ func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash comm
 		return fmt.Errorf("exceeds maximum batch size of %d", MaxEra1BatchSize)
 	}
 
-	// Record absolute offset and block hash for entry.
-	offset, err := b.w.CurrentOffset()
-	if err != nil {
-		return err
-	}
-	b.indexes = append(b.indexes, uint64(offset))
+	b.indexes = append(b.indexes, uint64(b.written))
 	b.hashes = append(b.hashes, hash)
 	b.tds = append(b.tds, td)
 
@@ -161,7 +157,8 @@ func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash comm
 		if err := s.Flush(); err != nil {
 			return fmt.Errorf("error flushing snappy encoding: %w", err)
 		}
-		_, err = b.w.Write(typ, buf.Bytes())
+		n, err := b.w.Write(typ, buf.Bytes())
+		b.written += n
 		if err != nil {
 			return fmt.Errorf("error writing e2store entry: %w", err)
 		}
@@ -180,7 +177,9 @@ func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash comm
 	}
 	// Also write total difficulty, but don't snappy encode.
 	btd := bigToBytes32(td)
-	if _, err := b.w.Write(TypeTotalDifficulty, btd[:]); err != nil {
+	n, err := b.w.Write(TypeTotalDifficulty, btd[:])
+	b.written += n
+	if err != nil {
 		return err
 	}
 
@@ -198,15 +197,13 @@ func (b *Builder) Finalize() error {
 	if err != nil {
 		return fmt.Errorf("error calculating accumulator root: %w", err)
 	}
-	if _, err := b.w.Write(TypeAccumulator, root[:]); err != nil {
+	n, err := b.w.Write(TypeAccumulator, root[:])
+	b.written += n
+	if err != nil {
 		return fmt.Errorf("error writing accumulator: %w", err)
 	}
 	// Get beginning of index entry to calculate block relative offset.
-	base, err := b.w.CurrentOffset()
-	if err != nil {
-		return err
-	}
-	base += 3 * 8 // skip e2store header (type, length) and start block
+	base := int64(b.written + (3 * 8)) // skip e2store header (type, length) and start block
 
 	// Construct block index. Detailed format described in Builder
 	// documentation, but it is essentially encoded as:
