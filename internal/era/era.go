@@ -411,7 +411,7 @@ func (r *Reader) ReadBlock(n uint64) (*types.Block, error) {
 		return nil, err
 	}
 	var body types.Body
-	if err := rlp.DecodeBytes(b, &header); err != nil {
+	if err := rlp.DecodeBytes(b, &body); err != nil {
 		return nil, err
 	}
 	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles), nil
