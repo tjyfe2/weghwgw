@@ -69,7 +69,6 @@ Remove blockchain and state databases`,
 			dbExportCmd,
 			dbMetadataCmd,
 			dbCheckStateContentCmd,
-			dbCropCmd,
 		},
 	}
 	dbInspectCmd = &cli.Command{
@@ -193,16 +192,6 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			utils.SyncModeFlag,
 		}, utils.NetworkFlags, utils.DatabasePathFlags),
 		Description: "Shows metadata about the chain status.",
-	}
-	dbCropCmd = &cli.Command{
-		Action:    crop,
-		ArgsUsage: "<new-start-block>",
-		Name:      "crop",
-		Usage:     "Crops historical blocks.",
-		Flags: flags.Merge([]cli.Flag{
-			utils.SyncModeFlag,
-		}, utils.NetworkFlags, utils.DatabasePathFlags),
-		Description: "Truncates chain db from start.",
 	}
 )
 
@@ -722,35 +711,5 @@ func showMetaData(ctx *cli.Context) error {
 	table.SetHeader([]string{"Field", "Value"})
 	table.AppendBulk(data)
 	table.Render()
-	return nil
-}
-
-func crop(ctx *cli.Context) error {
-	if ctx.NArg() < 1 {
-		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
-	}
-	tail, err := strconv.ParseUint(ctx.Args().Get(0), 10, 64)
-	if err != nil {
-		log.Info("Could not read tail value", "err", err)
-		return err
-	}
-	var (
-		stack, _ = makeConfigNode(ctx)
-		db       = utils.MakeChainDatabase(ctx, stack, false)
-		head     = rawdb.ReadHeadHeader(db).Number.Uint64()
-	)
-	defer stack.Close()
-
-	if head < tail {
-		return fmt.Errorf("requested tail %d beyond current head %d", tail, head)
-	}
-	for i := uint64(0); i < tail; i++ {
-                hash := rawdb.ReadCanonicalHash(db, i)
-                if hash == common.Hash{} {
-                        // not in db
-                        continue
-                }
-                rawdb.DeleteBlock(db, hash, i)
-	}
 	return nil
 }

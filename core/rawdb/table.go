@@ -124,14 +124,6 @@ func (t *table) AncientDatadir() (string, error) {
 	return t.db.AncientDatadir()
 }
 
-func (t *table) Glacier(kind string, number uint64) ([]byte, error) {
-	return nil, errNotSupported
-}
-
-func (t *table) GlacierRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
-	return nil, errNotSupported
-}
-
 // Put inserts the given value into the database at a prefixed version of the
 // provided key.
 func (t *table) Put(key []byte, value []byte) error {
