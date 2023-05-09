@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"runtime"
 	"strconv"
 	"sync/atomic"
@@ -130,6 +129,7 @@ be gzipped.`,
 			utils.TxLookupLimitFlag,
 		},
 			utils.DatabasePathFlags,
+			utils.NetworkFlags,
 		),
 		Description: "",
 	}
@@ -405,25 +405,41 @@ func importHistory(ctx *cli.Context) error {
 		network string
 	)
 
-	// Try to figure out the network.
-	for _, n := range params.NetworkNames {
-		if _, err := os.Stat(path.Join(dir, era.Filename(0, n))); err == nil {
-			network = n
-			break
+	// Determine network.
+	if utils.IsNetworkPreset(ctx) {
+		switch {
+		case ctx.Bool(utils.MainnetFlag.Name):
+			network = "mainnet"
+		case ctx.Bool(utils.SepoliaFlag.Name):
+			network = "sepolia"
+		case ctx.Bool(utils.GoerliFlag.Name):
+			network = "goerli"
 		}
-	}
-	// If not found, try "unknown".
-	if network == "" {
-		if _, err := os.Stat(path.Join(dir, era.Filename(0, "unknown"))); err == nil {
-			network = "unknown"
-		} else {
-			return fmt.Errorf("no known network")
+	} else {
+		// No network flag set, try to determine network based on files
+		// present in directory.
+		var networks []string
+		for _, n := range params.NetworkNames {
+			entries, err := era.ReadDir(dir, n)
+			if err != nil {
+				return fmt.Errorf("error reading %s: %w", dir, err)
+			}
+			if 0 < len(entries) {
+				networks = append(networks, n)
+			}
 		}
+		if len(networks) == 0 {
+			return fmt.Errorf("no era1 files found in %s", dir)
+		}
+		if len(networks) > 1 {
+			return fmt.Errorf("multiple networks found, use a network flag to specify desired network")
+		}
+		network = networks[0]
 	}
+
 	if err := utils.ImportHistory(chain, db, dir, network); err != nil {
 		return err
 	}
-
 	fmt.Printf("Import done in %v\n", time.Since(start))
 	return nil
 }

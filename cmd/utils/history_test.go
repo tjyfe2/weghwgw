@@ -17,8 +17,8 @@
 package utils
 
 import (
+	"bytes"
 	"crypto/sha256"
-	"fmt"
 	"io"
 	"math/big"
 	"os"
@@ -97,13 +97,24 @@ func TestHistoryImportAndExport(t *testing.T) {
 		t.Fatalf("error exporting history: %v", err)
 	}
 
+	// Read checksums.
+	b, err := os.ReadFile(path.Join(dir, "checksums.txt"))
+	if err != nil {
+		t.Fatalf("failed to read checksums: %v", err)
+	}
+	checksums := strings.Split(string(b), "\n")
+
 	// Verify each Era.
-	for i := 0; i < int(count/step); i++ {
-		f, err := os.Open(path.Join(dir, era.Filename(i, "mainnet")))
+	entries, _ := era.ReadDir(dir, "mainnet")
+	for i, filename := range entries {
+		b, err := os.ReadFile(path.Join(dir, filename))
 		if err != nil {
 			t.Fatalf("error opening era file: %v", err)
 		}
-		r := era.NewReader(f)
+		if want, got := common.HexToHash(checksums[i]), common.Hash(sha256.Sum256(b)); want != got {
+			t.Fatalf("checksum %d does not match: got %s, want %s", i, got, want)
+		}
+		r := era.NewReader(bytes.NewReader(b))
 		for j := 0; ; j += 1 {
 			b, r, err := r.Read()
 			if err == io.EOF {
@@ -131,13 +142,6 @@ func TestHistoryImportAndExport(t *testing.T) {
 				t.Fatalf("receipt root %d mismatch: want %s, got %s", i+j, want.ReceiptHash(), got)
 			}
 		}
-		if err := r.Verify(); err != nil {
-			t.Fatalf("failed to verify era %d: %v", i, err)
-		}
-	}
-
-	if err := validateChecksum(dir); err != nil {
-		t.Fatalf("%v", err)
 	}
 
 	// Now import Era.
@@ -158,32 +162,9 @@ func TestHistoryImportAndExport(t *testing.T) {
 	if err := ImportHistory(imported, db2, dir, "mainnet"); err != nil {
 		t.Fatalf("failed to import chain: %v", err)
 	}
-	// Set head since header chain was updated out from under block chain.
-	if err := imported.SetHead(128); err != nil {
-		t.Fatalf("failed to set head: %v", err)
-	}
 	if have, want := imported.CurrentHeader(), chain.CurrentHeader(); have.Hash() != want.Hash() {
 		t.Fatalf("imported chain does not match expected, have (%d, %s) want (%d, %s)", have.Number, have.Hash(), want.Number, want.Hash())
 	}
-}
-
-func validateChecksum(dir string) error {
-	b, err := os.ReadFile(path.Join(dir, "checksums.txt"))
-	if err != nil {
-		return err
-	}
-	checksums := strings.Split(string(b), "\n")
-
-	for i := 0; i < int(count/step); i++ {
-		b, err := os.ReadFile(path.Join(dir, era.Filename(i, "mainnet")))
-		if err != nil {
-			return fmt.Errorf("error opening era file: %v", err)
-		}
-		if want, got := common.HexToHash(checksums[i]), sha256.Sum256(b); want != got {
-			return fmt.Errorf("checksum %d does not match: got %s, want %s", i, got, want)
-		}
-	}
-	return nil
 }
 
 func BenchmarkHistoryImport(b *testing.B) {

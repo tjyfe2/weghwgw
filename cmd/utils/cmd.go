@@ -243,6 +243,10 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
 		return fmt.Errorf("history import only supported when starting from genesis")
 	}
+	entries, err := era.ReadDir(dir, network)
+	if err != nil {
+		return fmt.Errorf("error reading %s: %w", dir, err)
+	}
 	checksums, err := readList(path.Join(dir, "checksums.txt"))
 	if err != nil {
 		return fmt.Errorf("unable to read checksums.txt: %w", err)
@@ -253,15 +257,12 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 		imported = 0
 		forker   = core.NewForkChoice(chain, nil)
 	)
-	for i := 0; ; i++ {
+	for i, filename := range entries {
 		// Read entire Era1 to memory. Max historical Era1 is around
 		// 600MB. This is a lot to load at once, but it speeds up the
 		// import substantially.
-		// b, err := os.ReadFile(path.Join(dir, era.Filename(i, network)))
-		b, err := os.ReadFile(dir)
-		if os.IsNotExist(err) {
-			break
-		} else if err != nil {
+		b, err := os.ReadFile(path.Join(dir, filename))
+		if err != nil {
 			return fmt.Errorf("unable to open era: %w", err)
 		}
 
@@ -294,6 +295,7 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 				return fmt.Errorf("error inserting body %d: %w", n, err)
 			}
 			imported += 1
+
 			// Give the user some feedback that something is happening.
 			if time.Since(reported) >= 8*time.Second {
 				log.Info("Importing Era files", "head", n, "imported", imported, "elapsed", common.PrettyDuration(time.Since(start)))
@@ -401,8 +403,6 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 	)
 	for i := uint64(0); i <= last; i += step {
 		gen := func() error {
-			// Open file for Era.
-
 			var (
 				buf = bytes.NewBuffer(nil)
 				w   = era.NewBuilder(buf)

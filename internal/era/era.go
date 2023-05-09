@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"os"
+	"path"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -46,6 +49,31 @@ var (
 // epoch and network.
 func Filename(network string, epoch int, root common.Hash) string {
 	return fmt.Sprintf("%s-%05d-%s.era1", network, epoch, root.Hex()[2:10])
+}
+
+// ReadDir reads all the era1 files in a directory and groups them by network
+// in increasing epoch order.
+func ReadDir(dir, network string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("error reading directory %s: %w", dir, err)
+	}
+	var eras []string
+	for _, entry := range entries {
+		if path.Ext(entry.Name()) == ".era1" {
+			n := strings.Split(entry.Name(), "-")
+			if len(n) != 3 {
+				// invalid era1 filename, skip
+				continue
+			}
+			if n[0] == network {
+				// Since os.ReadDir is already ordered, we
+				// don't need to order further.
+				eras = append(eras, entry.Name())
+			}
+		}
+	}
+	return eras, nil
 }
 
 // Builder is used to create Era1 archives of block data.
