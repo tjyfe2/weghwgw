@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -51,14 +52,16 @@ func Filename(network string, epoch int, root common.Hash) string {
 	return fmt.Sprintf("%s-%05d-%s.era1", network, epoch, root.Hex()[2:10])
 }
 
-// ReadDir reads all the era1 files in a directory and groups them by network
-// in increasing epoch order.
+// ReadDir reads all the era1 files in a directory for a given network.
 func ReadDir(dir, network string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("error reading directory %s: %w", dir, err)
 	}
-	var eras []string
+	var (
+		next = uint64(0)
+		eras []string
+	)
 	for _, entry := range entries {
 		if path.Ext(entry.Name()) == ".era1" {
 			n := strings.Split(entry.Name(), "-")
@@ -67,8 +70,12 @@ func ReadDir(dir, network string) ([]string, error) {
 				continue
 			}
 			if n[0] == network {
-				// Since os.ReadDir is already ordered, we
-				// don't need to order further.
+				if epoch, err := strconv.ParseUint(n[1], 10, 64); err != nil {
+					return nil, fmt.Errorf("malformed era1 filename: %s", entry.Name())
+				} else if epoch != next {
+					return nil, fmt.Errorf("missing epoch %d", next)
+				}
+				next += 1
 				eras = append(eras, entry.Name())
 			}
 		}
