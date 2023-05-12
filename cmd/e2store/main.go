@@ -23,7 +23,7 @@ import (
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/internal/era/e2store"
+	"github.com/ethereum/go-ethereum/internal/e2store"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/urfave/cli/v2"
 )
@@ -60,11 +60,11 @@ func main() {
 
 // list prints all entries in the store.
 func list(ctx *cli.Context) error {
-	r, err := open(ctx, 1)
+	f, err := open(ctx, 1)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
+	r := e2store.NewReader(f)
 
 	for {
 		entry, err := r.Read()
@@ -84,11 +84,11 @@ func list(ctx *cli.Context) error {
 
 // find finds the first entry with a matching type.
 func find(ctx *cli.Context) error {
-	r, err := open(ctx, 2)
+	f, err := open(ctx, 2)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
+	r := e2store.NewReader(f)
 	typ, err := strconv.ParseUint(ctx.Args().Get(1), 10, 16)
 	if err != nil {
 		return fmt.Errorf("error parsing type argument: %w", err)
@@ -105,7 +105,7 @@ func find(ctx *cli.Context) error {
 }
 
 // open opens the e2store at the provided path.
-func open(ctx *cli.Context, argCount int) (*e2store.Reader, error) {
+func open(ctx *cli.Context, argCount int) (*os.File, error) {
 	if ctx.Args().Len() != argCount {
 		return nil, fmt.Errorf("missing file argument")
 	}
@@ -113,5 +113,5 @@ func open(ctx *cli.Context, argCount int) (*e2store.Reader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error opening e2store: %w", err)
 	}
-	return e2store.NewReader(f), nil
+	return f, nil
 }
