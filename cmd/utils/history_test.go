@@ -151,7 +151,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 		panic(err)
 	}
 	t.Cleanup(func() {
-		db.Close()
+		db2.Close()
 	})
 
 	genesis.MustCommit(db2)
