@@ -105,7 +105,7 @@ func main() {
 	}
 }
 
-// block prints the specified block from an Era store.
+// block prints the specified block from an era1 store.
 func block(ctx *cli.Context) error {
 	num, err := strconv.ParseUint(ctx.Args().First(), 10, 64)
 	if err != nil {
@@ -137,7 +137,7 @@ func block(ctx *cli.Context) error {
 	return nil
 }
 
-// info prints some high-level information about the Era file.
+// info prints some high-level information about the era1 file.
 func info(ctx *cli.Context) error {
 	epoch, err := strconv.ParseUint(ctx.Args().First(), 10, 64)
 	if err != nil {
@@ -219,7 +219,7 @@ func verify(ctx *cli.Context) error {
 	}
 
 	if len(entries) != len(roots) {
-		return fmt.Errorf("number era1 files should match the number of accumulator hashes")
+		return fmt.Errorf("number of era1 files should match the number of accumulator hashes")
 	}
 
 	// Verify each epoch matches the expected root.
