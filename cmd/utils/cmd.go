@@ -251,8 +251,8 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 	if err != nil {
 		return fmt.Errorf("unable to read checksums.txt: %w", err)
 	}
-	if len(checksums) <= len(entries) {
-		return fmt.Errorf("invalid checksums.txt: attempting to import more era1 files than have checksums")
+	if len(checksums) != len(entries) {
+		return fmt.Errorf("expected equal number of checksums and entries, have: %d checksums, %d entries", len(checksums), len(entries))
 	}
 	var (
 		start    = time.Now()
@@ -264,33 +264,33 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 		// Read entire Era1 to memory. Max historical Era1 is around
 		// 600MB. This is a lot to load at once, but it speeds up the
 		// import substantially.
-		b, err := os.ReadFile(path.Join(dir, filename))
+		f, err := os.ReadFile(path.Join(dir, filename))
 		if err != nil {
 			return fmt.Errorf("unable to open era: %w", err)
 		}
 
-		if have, want := common.Hash(sha256.Sum256(b)).Hex(), checksums[i]; have != want {
+		if have, want := common.Hash(sha256.Sum256(f)).Hex(), checksums[i]; have != want {
 			return fmt.Errorf("checksum mismatch: have %s, want %s", have, want)
 		}
 
 		// Import all block data from Era1.
-		r := era.NewReader(bytes.NewReader(b))
+		r := era.NewReader(bytes.NewReader(f))
 		for j := 0; ; j += 1 {
 			n := i*era.MaxEra1Size + j
-			b, r, err := r.Read()
+			block, receipts, err := r.Read()
 			if err == io.EOF {
 				break
 			} else if err != nil {
 				return fmt.Errorf("error reading block %d: %w", n, err)
-			} else if b.Number().BitLen() == 0 {
+			} else if block.Number().BitLen() == 0 {
 				continue // skip genesis
 			}
-			if status, err := chain.HeaderChain().InsertHeaderChain([]*types.Header{b.Header()}, start, forker); err != nil {
+			if status, err := chain.HeaderChain().InsertHeaderChain([]*types.Header{block.Header()}, start, forker); err != nil {
 				return fmt.Errorf("error inserting header %d: %w", n, err)
 			} else if status != core.CanonStatTy {
 				return fmt.Errorf("error inserting header %d, not canon: %v", n, status)
 			}
-			if _, err := chain.InsertReceiptChain([]*types.Block{b}, []types.Receipts{r}, 2^64-1); err != nil {
+			if _, err := chain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{receipts}, 2^64-1); err != nil {
 				return fmt.Errorf("error inserting body %d: %w", n, err)
 			}
 			imported += 1
@@ -303,10 +303,6 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 			}
 		}
 	}
-
-	// Manually update the head snap block so that when user restarts geth,
-	// it is able to begin syncing from the last imported block.
-	rawdb.WriteHeadFastBlockHash(db, chain.CurrentHeader().Hash())
 
 	return nil
 }
@@ -401,52 +397,49 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 		checksums []string
 	)
 	for i := uint64(first); i <= last; i += step {
-		gen := func() error {
+		var (
+			buf = bytes.NewBuffer(nil)
+			w   = era.NewBuilder(buf)
+		)
+		for j := uint64(0); j < step && j <= last-i; j++ {
 			var (
-				buf = bytes.NewBuffer(nil)
-				w   = era.NewBuilder(buf)
+				n     = i + j
+				block = bc.GetBlockByNumber(n)
 			)
-			for j := uint64(0); j < step && j <= last-i; j++ {
-				nr := i + j
-				block := bc.GetBlockByNumber(nr)
-				if block == nil {
-					return fmt.Errorf("export failed on #%d: not found", nr)
-				}
-				receipts := bc.GetReceiptsByHash(block.Hash())
-				if receipts == nil {
-					return fmt.Errorf("export failed on #%d: receipts not found", nr)
-				}
-				td := bc.GetTd(block.Hash(), block.NumberU64())
-				if td == nil {
-					return fmt.Errorf("export failed on #%d: total difficulty not found", nr)
-				}
-				if err := w.Add(block, receipts, td); err != nil {
-					return err
-				}
+			if block == nil {
+				return fmt.Errorf("export failed on #%d: not found", n)
 			}
-			root, err := w.Finalize()
-			if err != nil {
-				return fmt.Errorf("export failed to finalize %d: %w", step/i, err)
+			receipts := bc.GetReceiptsByHash(block.Hash())
+			if receipts == nil {
+				return fmt.Errorf("export failed on #%d: receipts not found", n)
 			}
-
-			// Compute checksum of entire Era1.
-			checksums = append(checksums, common.Hash(sha256.Sum256(buf.Bytes())).Hex())
-
-			// Write Era1 to disk.
-			filename := path.Join(dir, era.Filename(network, int(i/step), root))
-			if err := os.WriteFile(filename, buf.Bytes(), os.ModePerm); err != nil {
+			td := bc.GetTd(block.Hash(), block.NumberU64())
+			if td == nil {
+				return fmt.Errorf("export failed on #%d: total difficulty not found", n)
+			}
+			if err := w.Add(block, receipts, td); err != nil {
 				return err
 			}
-
-			if time.Since(reported) >= 8*time.Second {
-				log.Info("Exporting blocks", "exported", i, "elapsed", common.PrettyDuration(time.Since(start)))
-				reported = time.Now()
-			}
-			return nil
 		}
-		if err := gen(); err != nil {
+		root, err := w.Finalize()
+		if err != nil {
+			return fmt.Errorf("export failed to finalize %d: %w", step/i, err)
+		}
+
+		// Compute checksum of entire Era1.
+		checksums = append(checksums, common.Hash(sha256.Sum256(buf.Bytes())).Hex())
+
+		// Write Era1 to disk.
+		filename := path.Join(dir, era.Filename(network, int(i/step), root))
+		if err := os.WriteFile(filename, buf.Bytes(), os.ModePerm); err != nil {
 			return err
 		}
+
+		if time.Since(reported) >= 8*time.Second {
+			log.Info("Exporting blocks", "exported", i, "elapsed", common.PrettyDuration(time.Since(start)))
+			reported = time.Now()
+		}
+		return nil
 	}
 
 	os.WriteFile(path.Join(dir, "checksums.txt"), []byte(strings.Join(checksums, "\n")), os.ModePerm)

@@ -65,11 +65,6 @@ func (w *Writer) Write(typ uint16, b []byte) (int, error) {
 	return w.w.Write(buf)
 }
 
-// CurrentOffset returns the current offset of the underlying writer.
-func (w *Writer) CurrentOffset() (int64, error) {
-	return w.w.Seek(0, io.SeekCurrent)
-}
-
 // A Reader reads entries from an e2store-encoded file.
 // For more information on this format, see
 // https://github.com/status-im/nimbus-eth2/blob/stable/docs/e2store.md

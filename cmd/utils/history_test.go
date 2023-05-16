@@ -107,38 +107,38 @@ func TestHistoryImportAndExport(t *testing.T) {
 	// Verify each Era.
 	entries, _ := era.ReadDir(dir, "mainnet")
 	for i, filename := range entries {
-		b, err := os.ReadFile(path.Join(dir, filename))
+		f, err := os.ReadFile(path.Join(dir, filename))
 		if err != nil {
 			t.Fatalf("error opening era file: %v", err)
 		}
-		if want, got := common.HexToHash(checksums[i]), common.Hash(sha256.Sum256(b)); want != got {
+		if want, got := common.HexToHash(checksums[i]), common.Hash(sha256.Sum256(f)); want != got {
 			t.Fatalf("checksum %d does not match: got %s, want %s", i, got, want)
 		}
-		r := era.NewReader(bytes.NewReader(b))
+		r := era.NewReader(bytes.NewReader(f))
 		for j := 0; ; j += 1 {
-			b, r, err := r.Read()
+			block, receipts, err := r.Read()
 			if err == io.EOF {
 				break
 			} else if err != nil {
 				t.Fatalf("error reading era file %d: %v", i, err)
 			}
 			var (
-				num  = i*int(step) + j
-				want = chain.GetBlockByNumber(uint64(num))
+				n    = i*int(step) + j
+				want = chain.GetBlockByNumber(uint64(n))
 			)
-			if want, got := uint64(num), b.NumberU64(); want != got {
+			if want, got := uint64(n), block.NumberU64(); want != got {
 				t.Fatalf("blocks out of order: want %d, got %d", want, got)
 			}
-			if want.Hash() != b.Hash() {
-				t.Fatalf("block hash mistmatch %d: want %s, got %s", i+j, want.Hash().Hex(), b.Hash().Hex())
+			if want.Hash() != block.Hash() {
+				t.Fatalf("block hash mismatch %d: want %s, got %s", i+j, want.Hash().Hex(), block.Hash().Hex())
 			}
-			if got := types.DeriveSha(b.Transactions(), trie.NewStackTrie(nil)); got != want.TxHash() {
+			if got := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil)); got != want.TxHash() {
 				t.Fatalf("tx hash %d mismatch: want %s, got %s", i+j, want.TxHash(), got)
 			}
-			if got := types.CalcUncleHash(b.Uncles()); got != want.UncleHash() {
+			if got := types.CalcUncleHash(block.Uncles()); got != want.UncleHash() {
 				t.Fatalf("uncle hash %d mismatch: want %s, got %s", i+j, want.UncleHash(), got)
 			}
-			if got := types.DeriveSha(r, trie.NewStackTrie(nil)); got != want.ReceiptHash() {
+			if got := types.DeriveSha(receipts, trie.NewStackTrie(nil)); got != want.ReceiptHash() {
 				t.Fatalf("receipt root %d mismatch: want %s, got %s", i+j, want.ReceiptHash(), got)
 			}
 		}
@@ -164,37 +164,5 @@ func TestHistoryImportAndExport(t *testing.T) {
 	}
 	if have, want := imported.CurrentHeader(), chain.CurrentHeader(); have.Hash() != want.Hash() {
 		t.Fatalf("imported chain does not match expected, have (%d, %s) want (%d, %s)", have.Number, have.Hash(), want.Number, want.Hash())
-	}
-}
-
-func BenchmarkHistoryImport(b *testing.B) {
-	freezer := b.TempDir()
-	db, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), freezer, "", false)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
-	genesis := core.DefaultGenesisBlock()
-	genesis.MustCommit(db)
-
-	imported, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
-	if err != nil {
-		b.Fatalf("unable to initialize chain: %v", err)
-	}
-
-	var (
-		cwd, _ = os.Getwd()
-		dir    = path.Join(cwd, "testdata", "eras")
-	)
-
-	b.ResetTimer()
-
-	if err := ImportHistory(imported, db, dir, "mainnet"); err != nil {
-		b.Fatalf("failed to import chain: %v", err)
-	}
-
-	if imported.CurrentHeader().Number.BitLen() == 0 {
-		b.Fatalf("0 blocks imported")
 	}
 }
