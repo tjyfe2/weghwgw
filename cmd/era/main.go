@@ -50,10 +50,10 @@ var (
 		Usage: "network name associated with era1 files",
 		Value: "mainnet",
 	}
-	batchSizeFlag = &cli.IntFlag{
-		Name:  "batchSize",
-		Usage: "number blocks per batch",
-		Value: era.MaxEra1BatchSize,
+	eraSizeFlag = &cli.IntFlag{
+		Name:  "size",
+		Usage: "number of blocks per era",
+		Value: era.MaxEra1Size,
 	}
 	txsFlag = &cli.BoolFlag{
 		Name:  "txs",
@@ -94,7 +94,7 @@ func init() {
 	app.Flags = []cli.Flag{
 		dirFlag,
 		networkFlag,
-		batchSizeFlag,
+		eraSizeFlag,
 	}
 }
 
@@ -112,7 +112,7 @@ func block(ctx *cli.Context) error {
 		return fmt.Errorf("invalid block number: %w", err)
 	}
 
-	f, err := open(ctx, num/uint64(ctx.Int(batchSizeFlag.Name)))
+	f, err := open(ctx, num/uint64(ctx.Int(eraSizeFlag.Name)))
 	if err != nil {
 		return fmt.Errorf("error opening era: %w", err)
 	}

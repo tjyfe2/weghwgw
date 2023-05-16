@@ -39,7 +39,7 @@ func ComputeAccumulator(hashes []common.Hash, tds []*big.Int) (common.Hash, erro
 		}
 		hh.Append(root[:])
 	}
-	hh.MerkleizeWithMixin(0, uint64(len(hashes)), uint64(MaxEra1BatchSize))
+	hh.MerkleizeWithMixin(0, uint64(len(hashes)), uint64(MaxEra1Size))
 	return hh.HashRoot()
 }
 

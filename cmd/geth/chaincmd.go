@@ -468,7 +468,7 @@ func exportHistory(ctx *cli.Context) error {
 	if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
 		utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
 	}
-	err := utils.ExportHistory(chain, ctx.Args().First(), uint64(first), uint64(last), uint64(era.MaxEra1BatchSize))
+	err := utils.ExportHistory(chain, ctx.Args().First(), uint64(first), uint64(last), uint64(era.MaxEra1Size))
 	if err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}

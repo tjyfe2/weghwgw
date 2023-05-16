@@ -43,7 +43,7 @@ var (
 	TypeAccumulator        uint16 = 0x07
 	TypeBlockIndex         uint16 = 0x3266
 
-	MaxEra1BatchSize = 8192
+	MaxEra1Size = 8192
 )
 
 // Filename returns a recognizable Era1-formatted file name for the specified
@@ -172,8 +172,8 @@ func (b *Builder) AddRLP(header, body, receipts []byte, number uint64, hash comm
 		b.startNum = &n
 		b.startTd = new(big.Int).Sub(td, difficulty)
 	}
-	if len(b.indexes) >= MaxEra1BatchSize {
-		return fmt.Errorf("exceeds maximum batch size of %d", MaxEra1BatchSize)
+	if len(b.indexes) >= MaxEra1Size {
+		return fmt.Errorf("exceeds maximum batch size of %d", MaxEra1Size)
 	}
 
 	b.indexes = append(b.indexes, uint64(b.written))

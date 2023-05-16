@@ -277,7 +277,7 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 		// Import all block data from Era1.
 		r := era.NewReader(bytes.NewReader(b))
 		for j := 0; ; j += 1 {
-			n := i*era.MaxEra1BatchSize + j
+			n := i*era.MaxEra1Size + j
 			b, r, err := r.Read()
 			if err == io.EOF {
 				break
