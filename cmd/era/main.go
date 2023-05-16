@@ -279,7 +279,7 @@ func checkAccumulator(r *era.Reader) error {
 	//   * the block index is constructed correctly
 	//   * the starting total difficulty value is correct
 	//   * the accumulator is correct by recomputing it locally,
-	//     which verfies the blocks are all correct (via hash)
+	//     which verifies the blocks are all correct (via hash)
 	//   * the receipts root matches the value in the block
 	for j := 0; ; j++ {
 		// read() walks the block index, so we're able to
