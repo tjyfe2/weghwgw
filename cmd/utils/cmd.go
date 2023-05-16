@@ -251,6 +251,9 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 	if err != nil {
 		return fmt.Errorf("unable to read checksums.txt: %w", err)
 	}
+	if len(checksums) <= len(entries) {
+		return fmt.Errorf("invalid checksums.txt: attempting to import more era1 files than have checksums")
+	}
 	var (
 		start    = time.Now()
 		reported = time.Now()
@@ -266,10 +269,6 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 			return fmt.Errorf("unable to open era: %w", err)
 		}
 
-		// Verify era1 against corresponding checksum.
-		if len(checksums) <= i {
-			return fmt.Errorf("invalid checksums.txt: attempting to import more era1 files than have checksums")
-		}
 		if have, want := common.Hash(sha256.Sum256(b)).Hex(), checksums[i]; have != want {
 			return fmt.Errorf("checksum mismatch: have %s, want %s", have, want)
 		}
