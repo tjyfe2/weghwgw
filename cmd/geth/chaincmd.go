@@ -351,7 +351,7 @@ func importChain(ctx *cli.Context) error {
 }
 
 func exportChain(ctx *cli.Context) error {
-	if ctx.Args().Len() < 1 {
+	if ctx.Args().Len() != 3 {
 		utils.Fatalf(ctx.App.Usage)
 	}
 
@@ -361,27 +361,21 @@ func exportChain(ctx *cli.Context) error {
 	chain, _ := utils.MakeChain(ctx, stack, true)
 	start := time.Now()
 
-	var err error
-	fp := ctx.Args().First()
-	if ctx.Args().Len() < 3 {
-		err = utils.ExportChain(chain, fp)
-	} else {
-		// This can be improved to allow for numbers larger than 9223372036854775807
-		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
-		last, lerr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
-		if ferr != nil || lerr != nil {
-			utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
-		}
-		if first < 0 || last < 0 {
-			utils.Fatalf("Export error: block number must be greater than 0\n")
-		}
-		if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
-			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
-		}
-		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
+	var (
+		dir         = ctx.Args().Get(0)
+		first, ferr = strconv.ParseInt(ctx.Args().Get(1), 10, 64)
+		last, lerr  = strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+	)
+	if ferr != nil || lerr != nil {
+		utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
 	}
-
-	if err != nil {
+	if first < 0 || last < 0 {
+		utils.Fatalf("Export error: block number must be greater than 0\n")
+	}
+	if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
+		utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
+	}
+	if err := utils.ExportAppendChain(chain, dir, uint64(first), uint64(last)); err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 	fmt.Printf("Export done in %v\n", time.Since(start))
@@ -390,7 +384,7 @@ func exportChain(ctx *cli.Context) error {
 
 func importHistory(ctx *cli.Context) error {
 	if ctx.Args().Len() != 1 {
-		utils.Fatalf(ctx.Command.Usage)
+		utils.Fatalf("usage: %s", ctx.Command.ArgsUsage)
 	}
 
 	stack, _ := makeConfigNode(ctx)
@@ -448,7 +442,7 @@ func importHistory(ctx *cli.Context) error {
 // directory.
 func exportHistory(ctx *cli.Context) error {
 	if ctx.Args().Len() != 3 {
-		utils.Fatalf(ctx.Command.Usage)
+		utils.Fatalf("usage: %s", ctx.Command.ArgsUsage)
 	}
 
 	stack, _ := makeConfigNode(ctx)
