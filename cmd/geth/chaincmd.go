@@ -418,7 +418,7 @@ func importHistory(ctx *cli.Context) error {
 			if err != nil {
 				return fmt.Errorf("error reading %s: %w", dir, err)
 			}
-			if 0 < len(entries) {
+			if len(entries) > 0 {
 				networks = append(networks, n)
 			}
 		}
