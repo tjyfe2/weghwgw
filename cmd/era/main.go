@@ -191,7 +191,7 @@ func openEra1File(ctx *cli.Context, epoch uint64) (*os.File, error) {
 	if epoch >= uint64(len(entries)) {
 		return nil, fmt.Errorf("epoch out-of-bounds: have %d, want %d", len(entries), epoch)
 	}
-	return os.Open(entries[epoch])
+	return os.Open(path.Join(dir, entries[epoch]))
 }
 
 // verify checks each Era1 file in a directory to ensure it is well-formed and
