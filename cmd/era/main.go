@@ -189,7 +189,7 @@ func open(ctx *cli.Context, epoch uint64) (*os.File, error) {
 		return nil, fmt.Errorf("error reading era dir: %w", err)
 	}
 	if epoch >= uint64(len(entries)) {
-		return nil, fmt.Errorf("epoch out-of-bounds: have %d, want %d", len(entries), epoch)
+		return nil, fmt.Errorf("epoch out-of-bounds: last %d, want %d", len(entries)-1, epoch)
 	}
 	return os.Open(path.Join(dir, entries[epoch]))
 }
