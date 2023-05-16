@@ -141,7 +141,7 @@ func block(ctx *cli.Context) error {
 func info(ctx *cli.Context) error {
 	epoch, err := strconv.ParseUint(ctx.Args().First(), 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid block number: %w", err)
+		return fmt.Errorf("invalid epoch number: %w", err)
 	}
 	f, err := open(ctx, epoch)
 	if err != nil {
