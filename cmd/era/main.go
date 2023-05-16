@@ -42,17 +42,17 @@ var app = flags.NewApp("go-ethereum era tool")
 var (
 	dirFlag = &cli.StringFlag{
 		Name:  "dir",
-		Usage: "directory storing all relevant Era files",
+		Usage: "directory storing all relevant era1 files",
 		Value: "eras",
 	}
 	networkFlag = &cli.StringFlag{
 		Name:  "network",
-		Usage: "network name associated with Era files",
+		Usage: "network name associated with era1 files",
 		Value: "mainnet",
 	}
 	batchSizeFlag = &cli.IntFlag{
 		Name:  "batchSize",
-		Usage: "number blocks per era batch",
+		Usage: "number blocks per batch",
 		Value: era.MaxEra1BatchSize,
 	}
 	txsFlag = &cli.BoolFlag{
@@ -80,7 +80,7 @@ var (
 	verifyCommand = &cli.Command{
 		Name:      "verify",
 		ArgsUsage: "<expected>",
-		Usage:     "verifies each epoch against expected accumulator root",
+		Usage:     "verifies each era against expected accumulator root",
 		Action:    verify,
 	}
 )
@@ -112,7 +112,7 @@ func block(ctx *cli.Context) error {
 		return fmt.Errorf("invalid block number: %w", err)
 	}
 
-	f, err := openEra1File(ctx, num/uint64(ctx.Int(batchSizeFlag.Name)))
+	f, err := open(ctx, num/uint64(ctx.Int(batchSizeFlag.Name)))
 	if err != nil {
 		return fmt.Errorf("error opening era: %w", err)
 	}
@@ -143,7 +143,7 @@ func info(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("invalid block number: %w", err)
 	}
-	f, err := openEra1File(ctx, epoch)
+	f, err := open(ctx, epoch)
 	if err != nil {
 		return err
 	}
@@ -178,8 +178,8 @@ func info(ctx *cli.Context) error {
 	return nil
 }
 
-// openEra1 opens an Era file at a certain epoch.
-func openEra1File(ctx *cli.Context, epoch uint64) (*os.File, error) {
+// open opens an era1 file at a certain epoch.
+func open(ctx *cli.Context, epoch uint64) (*os.File, error) {
 	var (
 		dir     = ctx.String(dirFlag.Name)
 		network = ctx.String(networkFlag.Name)
@@ -194,7 +194,7 @@ func openEra1File(ctx *cli.Context, epoch uint64) (*os.File, error) {
 	return os.Open(path.Join(dir, entries[epoch]))
 }
 
-// verify checks each Era1 file in a directory to ensure it is well-formed and
+// verify checks each era1 file in a directory to ensure it is well-formed and
 // that the accumulator matches the expected value.
 func verify(ctx *cli.Context) error {
 	if ctx.Args().Len() != 1 {
@@ -274,8 +274,8 @@ func checkAccumulator(r *era.Reader) error {
 	if td, err = r.InitialTD(); err != nil {
 		return fmt.Errorf("error reading total difficulty: %w", err)
 	}
-	// Starting at epoch 0, iterate through all available Era files
-	// and check the following:
+	// Starting at epoch 0, iterate through all available era1 files and
+	// check the following:
 	//   * the block index is constructed correctly
 	//   * the starting total difficulty value is correct
 	//   * the accumulator is correct by recomputing it locally,
