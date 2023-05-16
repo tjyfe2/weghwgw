@@ -401,7 +401,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 		reported  = time.Now()
 		checksums []string
 	)
-	for i := uint64(0); i <= last; i += step {
+	for i := uint64(first); i <= last; i += step {
 		gen := func() error {
 			var (
 				buf = bytes.NewBuffer(nil)
