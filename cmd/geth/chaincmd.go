@@ -351,8 +351,8 @@ func importChain(ctx *cli.Context) error {
 }
 
 func exportChain(ctx *cli.Context) error {
-	if ctx.Args().Len() != 3 {
-		utils.Fatalf(ctx.App.Usage)
+	if ctx.Args().Len() < 1 {
+		utils.Fatalf("This command requires an argument.")
 	}
 
 	stack, _ := makeConfigNode(ctx)
@@ -361,21 +361,27 @@ func exportChain(ctx *cli.Context) error {
 	chain, _ := utils.MakeChain(ctx, stack, true)
 	start := time.Now()
 
-	var (
-		dir         = ctx.Args().Get(0)
-		first, ferr = strconv.ParseInt(ctx.Args().Get(1), 10, 64)
-		last, lerr  = strconv.ParseInt(ctx.Args().Get(2), 10, 64)
-	)
-	if ferr != nil || lerr != nil {
-		utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
+	var err error
+	fp := ctx.Args().First()
+	if ctx.Args().Len() < 3 {
+		err = utils.ExportChain(chain, fp)
+	} else {
+		// This can be improved to allow for numbers larger than 9223372036854775807
+		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
+		last, lerr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+		if ferr != nil || lerr != nil {
+			utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
+		}
+		if first < 0 || last < 0 {
+			utils.Fatalf("Export error: block number must be greater than 0\n")
+		}
+		if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
+			utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
+		}
+		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
+
 	}
-	if first < 0 || last < 0 {
-		utils.Fatalf("Export error: block number must be greater than 0\n")
-	}
-	if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
-		utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
-	}
-	if err := utils.ExportAppendChain(chain, dir, uint64(first), uint64(last)); err != nil {
+	if err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 	fmt.Printf("Export done in %v\n", time.Since(start))
@@ -451,8 +457,11 @@ func exportHistory(ctx *cli.Context) error {
 	chain, _ := utils.MakeChain(ctx, stack, true)
 	start := time.Now()
 
-	first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
-	last, lerr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+	var (
+		dir         = ctx.Args().Get(0)
+		first, ferr = strconv.ParseInt(ctx.Args().Get(1), 10, 64)
+		last, lerr  = strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+	)
 	if ferr != nil || lerr != nil {
 		utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
 	}
@@ -462,7 +471,7 @@ func exportHistory(ctx *cli.Context) error {
 	if head := chain.CurrentSnapBlock(); uint64(last) > head.Number.Uint64() {
 		utils.Fatalf("Export error: block number %d larger than head block %d\n", uint64(last), head.Number.Uint64())
 	}
-	err := utils.ExportHistory(chain, ctx.Args().First(), uint64(first), uint64(last), uint64(era.MaxEra1Size))
+	err := utils.ExportHistory(chain, dir, uint64(first), uint64(last), uint64(era.MaxEra1Size))
 	if err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
